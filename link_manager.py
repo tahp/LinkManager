@@ -2,484 +2,399 @@ import json
 import os
 import uuid # For unique link IDs later
 import time
-from datetime import datetime # For formatting timestamp
+from datetime import datetime # For formatting timestamp and parsing reminder input
+# import shlex # Kept for potential future use
 
-# Define the name of our data file
+# Define the name of our data files
 DATA_FILE = "links.json"
+CONFIG_FILE = "config.json"
 
-def format_timestamp(ts):
-    """Formats a Unix timestamp into a human-readable string."""
-    if not ts or ts == 0:
-        return "N/A"
-    try:
-        return datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-    except ValueError: # Handles potential errors if ts is out of range for fromtimestamp
-        return "Invalid Date"
+# Global variable to hold loaded configuration
+CONFIG = {}
 
-def load_links():
-    """Loads links from the JSON data file."""
-    if not os.path.exists(DATA_FILE):
-        return []
-    try:
-        if os.path.getsize(DATA_FILE) == 0:
-            return []
-        with open(DATA_FILE, 'r') as f:
-            links_data = json.load(f)
-            for link in links_data:
-                link.setdefault('notes', '')
-                link.setdefault('is_default', False)
-                link.setdefault('url', '')
-                link.setdefault('title', link.get('url', 'N/A'))
-                link.setdefault('id', str(uuid.uuid4()))
-                link.setdefault('reminder_timestamp', 0)
-                link.setdefault('last_visited_timestamp', 0)
-                link.setdefault('visit_count', 0)
-                link.setdefault('created_timestamp', int(time.time())) # Default to current if missing
-            return links_data
-    except (IOError, json.JSONDecodeError) as e:
-        print(f"Error loading links: {e}")
-        return []
-
-def save_links(links):
-    # ... (keep existing save_links function as is) ...
-    try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(links, f, indent=4)
-    except IOError as e:
-        print(f"Error saving links: {e}")
-
-
-def add_link_interactive():
-    # ... (keep existing add_link_interactive function as is) ...
-    print("\n--- Add New Link ---")
-    url = input("Enter the URL (must start with http:// or https://): ").strip()
-    if not url:
-        print("URL cannot be empty. Link not added.")
-        return
-    if not (url.startswith("http://") or url.startswith("https://")):
-        print("Invalid URL format. Must start with http:// or https://. Link not added.")
-        return
-
-    title = input("Enter a title (optional, press Enter to use URL as title): ").strip()
-    notes = input("Enter notes (optional): ").strip()
-    is_default_input = input("Mark as default link? (y/n, default n): ").strip().lower()
-    is_default = True if is_default_input == 'y' else False
-    
-    links = load_links()
-    # Use current time for created_timestamp when adding a new link
-    created_ts = int(time.time()) 
-
-    new_link = {
-        "id": str(uuid.uuid4()),
-        "url": url,
-        "title": title if title else url,
-        "notes": notes,
-        "is_default": is_default,
-        "reminder_timestamp": 0,
-        "last_visited_timestamp": 0,
-        "visit_count": 0,
-        "created_timestamp": created_ts # Set at creation
+# --- Configuration Functions ---
+def load_config():
+    """Loads configuration from config.json, or returns defaults."""
+    global CONFIG
+    defaults = {
+        "page_size": 5,
+        "date_format_choice": "1", # Corresponds to '%Y-%m-%d %H:%M:%S'
+        "date_formats": {
+            "1": "%Y-%m-%d %H:%M:%S", # Default
+            "2": "%d/%m/%Y %H:%M",   # Day/Month/Year Hour:Minute
+            "3": "%m/%d/%y %I:%M %p"    # Month/Day/YearShort Hour(12):Minute AM/PM
+        },
+        "default_export_path": "~/" # Default to home directory
     }
-    
-    links.append(new_link)
-    save_links(links)
-    print(f"Link added: {new_link['title']}")
-    print("--------------------")
+    if not os.path.exists(CONFIG_FILE):
+        CONFIG = defaults
+        save_config() # Save defaults if no config file exists
+        return
 
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            loaded_config = json.load(f)
+            # Ensure all keys from defaults are present
+            for key, value in defaults.items():
+                loaded_config.setdefault(key, value)
+            # Special handling for date_formats if user manually edited config
+            if not isinstance(loaded_config.get("date_formats"), dict) or \
+               not all(k in loaded_config["date_formats"] for k in ["1","2","3"]):
+                loaded_config["date_formats"] = defaults["date_formats"]
 
-def display_links(links_to_show, sort_by=None, sort_order='asc'):
-    """Displays a given list of links, with optional sorting."""
-    if not links_to_show:
-        print("\nNo links to display.")
+            CONFIG = loaded_config
+    except (IOError, json.JSONDecodeError) as e:
+        print(f"Error loading config: {e}. Using default settings.")
+        CONFIG = defaults
+    except Exception as e:
+        print(f"Unexpected error loading config: {e}. Using default settings.")
+        CONFIG = defaults
+
+def save_config():
+    """Saves the current CONFIG to config.json."""
+    global CONFIG
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(CONFIG, f, indent=4)
+        # print("Configuration saved.") # Optional feedback
+        return True
+    except IOError as e:
+        print(f"Error saving configuration: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error saving configuration: {e}")
         return False
 
-    # Create a copy to sort, to avoid modifying the original list if passed by reference
-    links_to_sort = list(links_to_show)
+def get_active_date_format_str():
+    """Gets the strftime format string based on current config."""
+    global CONFIG
+    choice = CONFIG.get("date_format_choice", "1")
+    return CONFIG.get("date_formats", {}).get(choice, "%Y-%m-%d %H:%M:%S") # Default to ISO like if error
 
+# --- Modified existing functions to use CONFIG ---
+def format_timestamp(ts):
+    """Formats a Unix timestamp into a human-readable string using configured format."""
+    if not ts or ts == 0: return "N/A"
+    date_format_str = get_active_date_format_str()
+    try:
+        return datetime.fromtimestamp(ts).strftime(date_format_str)
+    except ValueError: return "Invalid Date"
+    except OSError: return "Date out of range"
+
+# load_links and save_links for DATA_FILE remain largely the same,
+# but export/import will use config for default export path.
+
+# --- display_links needs to use CONFIG['page_size'] ---
+def display_links(links_to_show, sort_by=None, sort_order='asc', title_prefix="--- Links ---", 
+                  paginate=False): # Removed page_size from args, will use CONFIG
+    global CONFIG
+    page_size = CONFIG.get("page_size", 5) # Use configured page size
+
+    # ... (rest of display_links logic from previous step, ensuring it uses the local page_size) ...
+    if not links_to_show:
+        print(f"\n{title_prefix.replace('---', '--- No')} to display ---")
+        return False
+    links_to_sort = list(links_to_show)
     if sort_by:
         reverse_order = (sort_order == 'desc')
-        if sort_by == 'title':
-            links_to_sort.sort(key=lambda x: x.get('title', '').lower(), reverse=reverse_order)
-        elif sort_by == 'created': # Sort by 'created_timestamp'
-            links_to_sort.sort(key=lambda x: x.get('created_timestamp', 0), reverse=reverse_order)
-        elif sort_by == 'last_visited':
-            links_to_sort.sort(key=lambda x: x.get('last_visited_timestamp', 0), reverse=reverse_order)
-        elif sort_by == 'visit_count':
-            links_to_sort.sort(key=lambda x: x.get('visit_count', 0), reverse=reverse_order)
-    
-    # If no sort_by is provided, links_to_sort remains in its original order (or order from load_links)
+        if sort_by == 'title': links_to_sort.sort(key=lambda x: x.get('title', '').lower(), reverse=reverse_order)
+        elif sort_by == 'created': links_to_sort.sort(key=lambda x: x.get('created_timestamp', 0), reverse=reverse_order)
+        # ... other sort keys ...
+        elif sort_by == 'last_visited': links_to_sort.sort(key=lambda x: x.get('last_visited_timestamp', 0), reverse=reverse_order)
+        elif sort_by == 'visit_count': links_to_sort.sort(key=lambda x: x.get('visit_count', 0), reverse=reverse_order)
+        elif sort_by == 'reminder_time': links_to_sort.sort(key=lambda x: x.get('reminder_timestamp', 0), reverse=reverse_order)
 
-    print("\n--- Links ---")
-    for index, link in enumerate(links_to_sort): # Iterate over the (potentially) sorted list
-        default_marker = "[Default]" if link.get('is_default') else ""
-        print(f"{index + 1}. Title: {link.get('title', 'N/A')} {default_marker}")
-        print(f"   URL: {link.get('url', 'N/A')}")
-        if link.get('notes'):
-            print(f"   Notes: {link.get('notes')}")
-        print(f"   Visits: {link.get('visit_count', 0)}")
-        print(f"   Last Visited: {format_timestamp(link.get('last_visited_timestamp', 0))}")
-        print(f"   Added: {format_timestamp(link.get('created_timestamp', 0))}") # Display created_timestamp
-        print(f"   ID: {link.get('id', 'N/A')}")
-        print("-" * 10)
-    print("-------------")
+    total_items = len(links_to_sort)
+    if not paginate or total_items <= page_size:
+        header_note = f"(Showing all {total_items} items)" if paginate else "" # only show if paginate was true
+        print(f"\n{title_prefix} {header_note}")
+        for index, link in enumerate(links_to_sort):
+            default_marker = "[Default]" if link.get('is_default') else ""
+            print(f"{index + 1}. Title: {link.get('title', 'N/A')} {default_marker}")
+            print(f"   URL: {link.get('url', 'N/A')}")
+            if link.get('notes'): print(f"   Notes: {link.get('notes')}")
+            print(f"   Visits: {link.get('visit_count', 0)}")
+            print(f"   Last Visited: {format_timestamp(link.get('last_visited_timestamp', 0))}")
+            print(f"   Added: {format_timestamp(link.get('created_timestamp', 0))}")
+            print(f"   Reminder: {format_timestamp(link.get('reminder_timestamp', 0))}")
+            print(f"   ID: {link.get('id', 'N/A')}")
+            print("-" * 10)
+        print("-------------")
+        return True
+
+    total_pages = (total_items + page_size - 1) // page_size
+    current_page = 1
+    while True:
+        start_index = (current_page - 1) * page_size
+        end_index = start_index + page_size
+        page_items = links_to_sort[start_index:end_index]
+        print(f"\n{title_prefix} (Page {current_page}/{total_pages}, Items {start_index + 1}-{min(end_index, total_items)} of {total_items})")
+        for index, link in enumerate(page_items):
+            default_marker = "[Default]" if link.get('is_default') else ""
+            print(f"{index + 1}. Title: {link.get('title', 'N/A')} {default_marker}")
+            # ... print other link details ...
+            print(f"   URL: {link.get('url', 'N/A')}")
+            if link.get('notes'): print(f"   Notes: {link.get('notes')}")
+            print(f"   Visits: {link.get('visit_count', 0)}")
+            print(f"   Last Visited: {format_timestamp(link.get('last_visited_timestamp', 0))}")
+            print(f"   Added: {format_timestamp(link.get('created_timestamp', 0))}")
+            print(f"   Reminder: {format_timestamp(link.get('reminder_timestamp', 0))}")
+            print(f"   ID: {link.get('id', 'N/A')}")
+            print("-" * 10)
+        print("-------------")
+        if total_pages <= 1: break
+        prompt_str = "Options: Next (n), Prev (p), Go (gX), Quit view (q): "
+        page_choice = input(prompt_str).strip().lower()
+        if page_choice == 'n':
+            if current_page < total_pages: current_page += 1
+            else: print("Already on the last page.")
+        elif page_choice == 'p':
+            if current_page > 1: current_page -= 1
+            else: print("Already on the first page.")
+        elif page_choice.startswith('g'):
+            try:
+                target_page_str = page_choice[1:]
+                if not target_page_str: raise ValueError("No page number.")
+                target_page = int(target_page_str)
+                if 1 <= target_page <= total_pages: current_page = target_page
+                else: print(f"Page number out of range (1-{total_pages}).")
+            except ValueError: print("Invalid 'go to page' format (e.g., g3).")
+        elif page_choice == 'q': break
+        else: print("Invalid option.")
     return True
 
-def get_sort_preferences():
-    """Prompts user for sort criteria and order."""
-    print("\nSort options:")
-    print("  Sort by: 1. Title  2. Date Added  3. Last Visited  4. Visit Count  0. No Sort")
-    sort_choice = input("  Enter sort field choice (0-4): ").strip()
-
-    sort_by_key = None
-    if sort_choice == '1':
-        sort_by_key = 'title'
-    elif sort_choice == '2':
-        sort_by_key = 'created'
-    elif sort_choice == '3':
-        sort_by_key = 'last_visited'
-    elif sort_choice == '4':
-        sort_by_key = 'visit_count'
-    elif sort_choice == '0':
-        return None, None # No sorting
-    else:
-        print("  Invalid sort field choice. No sorting will be applied.")
-        return None, None
-
-    print("  Order: 1. Ascending  2. Descending")
-    order_choice = input(f"  Sort '{sort_by_key}' by (1-2, default Ascending): ").strip()
-    sort_order_str = 'asc'
-    if order_choice == '2':
-        sort_order_str = 'desc'
-    elif order_choice != '1' and order_choice != '': # if not 1 and not empty
-        print("  Invalid order choice. Defaulting to Ascending.")
-
-    return sort_by_key, sort_order_str
-
+# view_all_links_interactive, search_links_interactive, view_reminders_interactive
+# will call display_links with paginate=True, and display_links will pick up page_size from CONFIG.
 
 def view_all_links_interactive():
-    """Loads and displays all links, with optional sorting."""
     all_links = load_links()
-    if not all_links:
-        display_links(all_links) # This will print "No links to display."
-        return
-
+    title_prefix="--- All Links ---"
+    if not all_links: display_links(all_links, title_prefix=title_prefix); return
     sort_by, sort_order = get_sort_preferences()
-    display_links(all_links, sort_by=sort_by, sort_order=sort_order)
+    display_links(all_links, sort_by=sort_by, sort_order=sort_order, 
+                  title_prefix=title_prefix, paginate=True) # paginate=True
 
-
-def delete_link_interactive():
-    # ... (keep existing delete_link_interactive function as is, 
-    # it already calls view_all_links_interactive which will now offer sort) ...
-    print("\n--- Delete Link ---")
-    view_all_links_interactive() 
-    
-    links = load_links() 
-    if not links: 
-        return
-
-    try:
-        choice_str = input("Enter the number of the link to delete (as shown in the list): ").strip() # Clarified prompt
-        if not choice_str:
-            print("No selection made. Deletion cancelled.")
-            return
-            
-        choice = int(choice_str)
-        
-        # IMPORTANT: The 'choice' here refers to the index in the *potentially sorted* list
-        # that was just displayed. We need to map this back to an item in the original `links` list.
-        # For simplicity in this CLI, we will re-load and assume the user is careful or
-        # we accept that deletion after sorting can be tricky without stable IDs visible or used for selection.
-        # A more robust way would be to delete by ID.
-        # For now, let's keep it simple: if sorted, the numbers might not map directly to original storage order.
-        # One simple fix: load_links() provides the list in a consistent (though not necessarily sorted) order.
-        # If we always operate on the `links` list loaded at the start of the function, choice is relative to that.
-        # The `view_all_links_interactive()` call is for display only.
-
-        # To make deletion by number safer after sorting, we should ideally ask for ID or re-display a non-sorted list
-        # for deletion. Or, the user understands the number pertains to the *just displayed, possibly sorted* list.
-        # Let's assume the user uses the number from the list they just saw.
-        # We need to ensure the displayed list's numbering corresponds to what we can pop.
-        # The easiest way is to sort `links` (the list we operate on) if sort options were chosen for display,
-        # or instruct user to delete by ID (future enhancement).
-        # For now, the `links` list loaded for deletion is not sorted.
-        # The `view_all_links_interactive` is just for visual aid. This means the user must note the ID.
-
-        # A better approach for interactive delete when display can be sorted:
-        # 1. Display links (sorted or not). User sees numbers.
-        # 2. Ask for number.
-        # 3. If display was sorted, we need to find the actual item from the original unsorted list.
-        # This is tricky if only relying on list index.
-        # Let's adjust: Deletion will use numbers from an unsorted display for safety for now, or prompt by ID.
-        # For this iteration, we'll keep it simpler: the view before delete shows numbers.
-        # We will re-fetch the list for `links` for the operation, which is unsorted.
-        # This means the number they enter should ideally correspond to the original order, not a sorted one,
-        # which is confusing.
-        #
-        # Solution for now: Let `delete_link_interactive` display a fresh, unsorted list to pick from.
-        
-        temp_links_for_selection = load_links()
-        if not temp_links_for_selection:
-            print("No links available to delete.")
-            return
-        
-        print("\n--- Select Link to Delete (from list below) ---")
-        display_links(temp_links_for_selection) # Display fresh, unsorted list with numbers
-
-        if not temp_links_for_selection: # Should be caught by display_links
-             return
-
-        choice_str = input("Enter the number of the link to delete: ").strip()
-        if not choice_str:
-            print("No selection made. Deletion cancelled.")
-            return
-        choice = int(choice_str)
-
-
-        if choice < 1 or choice > len(temp_links_for_selection):
-            print("Invalid link number. Please try again.")
-            return
-
-        link_to_delete_from_original_list = temp_links_for_selection[choice - 1]
-        
-        # Now find this link in the main `links` list by ID to ensure we delete the correct one
-        actual_links_for_deletion = load_links()
-        index_to_delete = -1
-        for i, link in enumerate(actual_links_for_deletion):
-            if link.get('id') == link_to_delete_from_original_list.get('id'):
-                index_to_delete = i
-                break
-        
-        if index_to_delete == -1:
-            print("Error: Link not found for deletion. It might have been deleted already.")
-            return
-
-        link_to_delete_obj = actual_links_for_deletion[index_to_delete]
-        default_warning = " This is a default link." if link_to_delete_obj.get('is_default') else ""
-        confirm = input(f"Are you sure you want to delete '{link_to_delete_obj.get('title', 'N/A')}'?{default_warning} (y/n): ").strip().lower()
-        
-        if confirm == 'y':
-            deleted_link_obj = actual_links_for_deletion.pop(index_to_delete)
-            save_links(actual_links_for_deletion)
-            print(f"Link '{deleted_link_obj.get('title', 'N/A')}' deleted successfully.")
-        else:
-            print("Deletion cancelled.")
-            
-    except ValueError:
-        print("Invalid input. Please enter a number.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-    print("-------------------")
-
-
-def edit_link_interactive():
-    # Similar logic to delete for selecting the correct link if display was sorted
-    print("\n--- Edit Link ---")
-    temp_links_for_selection = load_links()
-    if not temp_links_for_selection:
-        print("No links available to edit.")
-        return
-        
-    print("\n--- Select Link to Edit (from list below) ---")
-    display_links(temp_links_for_selection) # Display fresh, unsorted list with numbers
-
-    if not temp_links_for_selection:
-        return
-
-    try:
-        choice_str = input("Enter the number of the link to edit: ").strip()
-        if not choice_str:
-            print("No selection made. Edit cancelled.")
-            return
-        choice = int(choice_str)
-
-        if choice < 1 or choice > len(temp_links_for_selection):
-            print("Invalid link number. Please try again.")
-            return
-
-        link_id_to_edit = temp_links_for_selection[choice - 1].get('id')
-        
-        # Load the main list to perform the edit
-        links = load_links()
-        link_to_edit_index = -1
-        for i, link_obj in enumerate(links):
-            if link_obj.get('id') == link_id_to_edit:
-                link_to_edit_index = i
-                break
-        
-        if link_to_edit_index == -1:
-            print("Error: Link not found for editing.")
-            return
-
-        link_to_edit = links[link_to_edit_index] # This is the dictionary from the list 'links'
-
-        print(f"\nEditing link: '{link_to_edit.get('title', 'N/A')}'")
-        
-        print(f"Current URL: {link_to_edit.get('url')}")
-        new_url = input(f"Enter new URL (or press Enter to keep current): ").strip()
-        if new_url and not (new_url.startswith("http://") or new_url.startswith("https://")):
-            print("Invalid URL format. URL not changed.")
-            new_url = link_to_edit.get('url')
-        elif not new_url: # Empty input
-            new_url = link_to_edit.get('url')
-
-        print(f"Current Title: {link_to_edit.get('title')}")
-        new_title = input(f"Enter new title (or press Enter to keep current): ").strip()
-        if not new_title: # Empty input
-            new_title = link_to_edit.get('title')
-        
-        print(f"Current Notes: {link_to_edit.get('notes', '')}") 
-        new_notes_input = input("Enter new notes (or press Enter to keep current, type 'clear' to remove notes): ").strip()
-        if new_notes_input.lower() == 'clear':
-            new_notes = ''
-        elif new_notes_input:
-            new_notes = new_notes_input
-        else: 
-            new_notes = link_to_edit.get('notes', '')
-
-        current_default_status = "y" if link_to_edit.get('is_default') else "n"
-        print(f"Currently a default link: {current_default_status.upper()}")
-        is_default_input = input(f"Make this a default link? (y/n, Enter to keep '{current_default_status}'): ").strip().lower()
-        new_is_default = link_to_edit.get('is_default') 
-        if is_default_input == 'y':
-            new_is_default = True
-        elif is_default_input == 'n':
-            new_is_default = False
-
-        # Update the link in the 'links' list directly
-        links[link_to_edit_index]['url'] = new_url
-        links[link_to_edit_index]['title'] = new_title if new_title else new_url
-        links[link_to_edit_index]['notes'] = new_notes
-        links[link_to_edit_index]['is_default'] = new_is_default
-        # We should also update a 'modified_timestamp' if we add one.
-        
-        save_links(links) # Save the modified 'links' list
-        print(f"Link updated successfully: '{links[link_to_edit_index]['title']}'")
-
-    except ValueError:
-        print("Invalid input. Please enter a number.")
-    except Exception as e:
-        print(f"An unexpected error occurred during edit: {e}")
-    print("-----------------")
-
-
-def visit_link_interactive():
-    # Similar logic to delete/edit for selecting the correct link
-    print("\n--- Visit Link ---")
-    temp_links_for_selection = load_links()
-    if not temp_links_for_selection:
-        print("No links available to visit.")
-        return
-
-    print("\n--- Select Link to Visit (from list below) ---")
-    display_links(temp_links_for_selection) # Display fresh, unsorted list with numbers
-
-    if not temp_links_for_selection:
-        return
-    
-    try:
-        choice_str = input("Enter the number of the link to mark as visited: ").strip()
-        if not choice_str:
-            print("No selection made. Visit cancelled.")
-            return
-            
-        choice = int(choice_str)
-
-        if choice < 1 or choice > len(temp_links_for_selection):
-            print("Invalid link number. Please try again.")
-            return
-
-        link_id_to_visit = temp_links_for_selection[choice - 1].get('id')
-
-        links = load_links()
-        link_to_visit_index = -1
-        for i, link_obj in enumerate(links):
-            if link_obj.get('id') == link_id_to_visit:
-                link_to_visit_index = i
-                break
-        
-        if link_to_visit_index == -1:
-            print("Error: Link not found to mark as visited.")
-            return
-        
-        links[link_to_visit_index]['visit_count'] = links[link_to_visit_index].get('visit_count', 0) + 1
-        links[link_to_visit_index]['last_visited_timestamp'] = int(time.time())
-        
-        save_links(links)
-        
-        visited_link_title = links[link_to_visit_index].get('title', 'N/A')
-        visited_link_url = links[link_to_visit_index].get('url', 'N/A')
-        print(f"Marked '{visited_link_title}' as visited.")
-        print(f"URL: {visited_link_url}")
-        
-    except ValueError:
-        print("Invalid input. Please enter a number.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-    print("------------------")
-
-
-def search_links_interactive():
-    """Searches links by keyword in title, URL, or notes, with optional sorting."""
-    print("\n--- Search Links ---")
+def basic_search_links_interactive():
+    # ... (search logic) ...
+    # When displaying:
+    # display_links(filtered_links, ..., paginate=True)
+    print("\n--- Basic Search Links ---")
     search_term = input("Enter search term: ").strip().lower()
-
-    if not search_term:
-        print("Search term cannot be empty.")
-        return
-
-    all_links = load_links()
-    if not all_links:
-        print("No links available to search.")
-        return
-
-    filtered_links = []
+    if not search_term: print("Search term empty."); return
+    all_links = load_links(); filtered_links = []
+    if not all_links: print("No links to search."); return
     for link in all_links:
-        title = link.get('title', '').lower()
-        url = link.get('url', '').lower()
-        notes = link.get('notes', '').lower()
-
-        if search_term in title or search_term in url or search_term in notes:
+        if search_term in link.get('title', '').lower() or \
+           search_term in link.get('url', '').lower() or \
+           search_term in link.get('notes', '').lower():
             filtered_links.append(link)
-
-    if not filtered_links:
-        print(f"No links found matching '{search_term}'.")
+    if not filtered_links: print(f"No links found for '{search_term}'.")
     else:
-        print(f"\nFound {len(filtered_links)} link(s) matching '{search_term}':")
+        print(f"\nFound {len(filtered_links)} link(s) for '{search_term}':")
         sort_by, sort_order = get_sort_preferences()
-        display_links(filtered_links, sort_by=sort_by, sort_order=sort_order)
+        display_links(filtered_links, sort_by=sort_by, sort_order=sort_order, 
+                      title_prefix=f"--- Search Results for '{search_term}' ---", paginate=True)
     print("--------------------")
 
 
+def advanced_search_links_interactive():
+    # ... (search logic) ...
+    # When displaying:
+    # display_links(filtered_links, ..., paginate=True)
+    print("\n--- Advanced Search Links ---")
+    print("Syntax: field:value (e.g., title:work notes:important is:default)")
+    query_str = input("Enter advanced search query: ").strip().lower()
+    if not query_str: print("Query empty."); return
+    all_links = load_links(); filtered_links = []
+    if not all_links: print("No links to search."); return
+    criteria_parts = query_str.split(); parsed_criteria = []; valid_query = True
+    for part in criteria_parts:
+        if ':' not in part: print(f"Invalid: '{part}'. Expected 'field:value'."); valid_query = False; break
+        field, value = part.split(':', 1)
+        if field not in ['title', 'url', 'notes', 'is']: print(f"Invalid field: '{field}'."); valid_query = False; break
+        if field == 'is' and value not in ['default', 'not-default']: print(f"Invalid value for 'is': '{value}'."); valid_query = False; break
+        parsed_criteria.append({'field': field, 'value': value})
+    if not valid_query or not parsed_criteria: return
+    for link in all_links: # Corrected variable name
+        match_all = True
+        for crit in parsed_criteria:
+            f, v = crit['field'], crit['value']
+            if f == 'title' and v not in link.get('title','').lower(): match_all=False; break
+            elif f == 'url' and v not in link.get('url','').lower(): match_all=False; break
+            elif f == 'notes' and v not in link.get('notes','').lower(): match_all=False; break
+            elif f == 'is':
+                if v == 'default' and not link.get('is_default'): match_all=False; break
+                if v == 'not-default' and link.get('is_default'): match_all=False; break
+        if match_all: filtered_links.append(link) # Corrected variable name
+    if not filtered_links: print(f"No links found for '{query_str}'.")
+    else:
+        print(f"\nFound {len(filtered_links)} link(s) for '{query_str}':")
+        sort_by, sort_order = get_sort_preferences()
+        display_links(filtered_links, sort_by=sort_by, sort_order=sort_order, 
+                      title_prefix=f"--- Advanced Search Results ---", paginate=True)
+    print("---------------------------")
+
+def view_reminders_interactive():
+    # ... (reminder logic) ...
+    # When displaying:
+    # display_links(due_overdue_reminders, ..., paginate=True)
+    # display_links(upcoming_reminders, ..., paginate=True)
+    print("\n--- View Reminders ---")
+    all_links = load_links(); now_ts = int(time.time()); due = []; upcoming = []
+    if not all_links: print("No links for reminders."); return
+    for link in all_links:
+        rem_ts = link.get('reminder_timestamp', 0)
+        if rem_ts > 0:
+            if rem_ts <= now_ts: due.append(link)
+            else: upcoming.append(link)
+    rem_found = False
+    if due:
+        rem_found = True
+        display_links(due, sort_by='reminder_time', sort_order='asc', 
+                      title_prefix="--- Due/Overdue Reminders ---", paginate=True)
+    else: print("\nNo due or overdue reminders.")
+    if upcoming:
+        rem_found = True
+        display_links(upcoming, sort_by='reminder_time', sort_order='asc', 
+                      title_prefix="--- Upcoming Reminders ---", paginate=True)
+    else: print("\nNo upcoming reminders.")
+    if not rem_found : print("\nNo reminders are currently set or active.")
+    print("----------------------")
+
+
+def export_links_interactive():
+    global CONFIG
+    print("\n--- Export Links ---")
+    current_links = load_links()
+    if not current_links and input("No links. Create empty export? (y/n): ").lower() != 'y': return
+
+    # Use configured default path, then timestamped filename
+    default_export_dir = os.path.expanduser(CONFIG.get("default_export_path", "~/"))
+    if not default_export_dir.endswith('/'): default_export_dir += '/'
+    default_filename = f"links_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    suggested_path = os.path.join(default_export_dir, default_filename) # Use os.path.join
+
+    print(f"\nTip: To save to shared storage, ensure 'termux-setup-storage' has been run.")
+    print(f"Default export directory is: {default_export_dir}")
+    export_filepath_str = input(f"Enter filename or full path for export (default: {suggested_path}): ").strip()
+    
+    export_filepath = os.path.expanduser(export_filepath_str or suggested_path)
+
+    try:
+        export_dir_actual = os.path.dirname(export_filepath)
+        if export_dir_actual and not os.path.exists(export_dir_actual):
+            os.makedirs(export_dir_actual); print(f"Created directory: {export_dir_actual}")
+    except OSError as e: print(f"Error creating directory: {e}"); return
+    except Exception as e: print(f"Invalid path: {e}"); return
+
+    if save_links(current_links, export_filepath): print(f"Exported {len(current_links)} links to: {export_filepath}")
+    else: print(f"Failed to export to: {export_filepath}")
+    print("--------------------")
+
+# --- New Settings Function ---
+def configure_settings_interactive():
+    """Allows user to configure application settings."""
+    global CONFIG
+    print("\n--- Configure Settings ---")
+    
+    while True:
+        print("\nCurrent Settings:")
+        print(f"1. Page Size for lists: {CONFIG.get('page_size', 5)}")
+        
+        current_format_choice = CONFIG.get('date_format_choice', "1")
+        current_format_str = CONFIG.get('date_formats', {}).get(current_format_choice, "N/A")
+        print(f"2. Date Display Format: Choice {current_format_choice} ({current_format_str})")
+        
+        print(f"3. Default Export Path: {CONFIG.get('default_export_path', '~/')}")
+        print("0. Back to Main Menu")
+
+        choice = input("Enter setting to change (0-3): ").strip()
+
+        if choice == '0':
+            break
+        elif choice == '1':
+            try:
+                new_size_str = input(f"Enter new page size (current: {CONFIG.get('page_size')}): ").strip()
+                if new_size_str: # Only update if user entered something
+                    new_size = int(new_size_str)
+                    if new_size > 0:
+                        CONFIG['page_size'] = new_size
+                        print(f"Page size set to {new_size}.")
+                    else:
+                        print("Page size must be a positive number.")
+            except ValueError:
+                print("Invalid input. Page size must be a number.")
+        elif choice == '2':
+            print("Available Date Formats:")
+            for k, v_format in CONFIG.get("date_formats", {}).items():
+                # Show example using current time
+                example_time = datetime.now().strftime(v_format)
+                print(f"  {k}: {v_format} (e.g., {example_time})")
+            
+            new_format_choice = input("Enter choice for date format: ").strip()
+            if new_format_choice in CONFIG.get("date_formats", {}):
+                CONFIG['date_format_choice'] = new_format_choice
+                print(f"Date format set to choice {new_format_choice}.")
+            else:
+                print("Invalid choice for date format.")
+        elif choice == '3':
+            new_path = input(f"Enter new default export path (current: {CONFIG.get('default_export_path')}): ").strip()
+            if new_path: # Only update if user entered something
+                # Basic validation: should probably check if it's a writable dir, but keep it simple for now
+                CONFIG['default_export_path'] = new_path
+                print(f"Default export path set to {new_path}.")
+        else:
+            print("Invalid choice.")
+
+        save_config() # Save after each change or at the end of the loop
+    print("------------------------")
+
+
+# --- Main CLI ---
 def main_cli():
-    """Main function to run the command-line interface."""
+    global CONFIG
+    load_config() # Load configuration at the start
+
     while True:
         print("\nInteractive Link Manager")
+        # ... (menu options 1-8 remain the same) ...
         print("1. Add Link")
         print("2. View All Links")
         print("3. Delete Link")
         print("4. Edit Link")
         print("5. Visit Link")
-        print("6. Search Links")
-        print("7. Exit")
-        choice = input("Enter your choice (1-7): ").strip()
+        print("6. Basic Search Links")
+        print("7. Advanced Search Links")
+        print("8. View Reminders")
+        print("9. Export Links")
+        print("10. Import Links")
+        print("11. Settings")         # New
+        print("12. Exit")            # Shifted
+        choice = input("Enter your choice (1-12): ").strip()
 
-        if choice == '1':
-            add_link_interactive()
-        elif choice == '2':
-            view_all_links_interactive()
-        elif choice == '3':
-            delete_link_interactive()
-        elif choice == '4':
-            edit_link_interactive()
-        elif choice == '5':
-            visit_link_interactive()
-        elif choice == '6':
-            search_links_interactive()
-        elif choice == '7':
+        if choice == '1': add_link_interactive()
+        elif choice == '2': view_all_links_interactive()
+        # ... (elif for 3-8) ...
+        elif choice == '3': delete_link_interactive()
+        elif choice == '4': edit_link_interactive()
+        elif choice == '5': visit_link_interactive()
+        elif choice == '6': basic_search_links_interactive()
+        elif choice == '7': advanced_search_links_interactive()
+        elif choice == '8': view_reminders_interactive()
+        elif choice == '9': export_links_interactive()
+        elif choice == '10': import_links_interactive()
+        elif choice == '11': configure_settings_interactive() # New
+        elif choice == '12':
             print("Exiting Link Manager. Goodbye!")
             break
         else:
-            print("Invalid choice. Please enter a number between 1 and 7.")
+            print("Invalid choice. Please enter a number between 1 and 12.")
+
+# Ensure all other functions (prompt_for_reminder_datetime, add_link_interactive, get_sort_preferences,
+# view_all_links_interactive, delete_link_interactive, edit_link_interactive, visit_link_interactive,
+# basic_search_links_interactive, advanced_search_links_interactive, view_reminders_interactive,
+# export_links_interactive, import_links_interactive) are correctly defined in your full script.
+# I've included stubs or full versions for modified ones.
 
 if __name__ == "__main__":
     main_cli()

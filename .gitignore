@@ -4,3 +4,4 @@ __pycache__/
 *.pyd
 .env
 # links.json # <--- Add this line if you DON'T want to commit your test links file
+config.json
