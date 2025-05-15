@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+# links.json # <--- Add this line if you DON'T want to commit your test links file
