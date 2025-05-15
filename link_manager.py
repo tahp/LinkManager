@@ -14,8 +14,20 @@ def load_links():
         if os.path.getsize(DATA_FILE) == 0:
             return []
         with open(DATA_FILE, 'r') as f:
-            links = json.load(f)
-            return links
+            links_data = json.load(f)
+            # Ensure all links have new fields, providing defaults if missing
+            for link in links_data:
+                link.setdefault('notes', '')
+                link.setdefault('is_default', False)
+                # Ensure other existing fields have defaults if somehow missing from older data
+                link.setdefault('url', '')
+                link.setdefault('title', link.get('url', 'N/A'))
+                link.setdefault('id', str(uuid.uuid4()))
+                link.setdefault('reminder_timestamp', 0)
+                link.setdefault('last_visited_timestamp', 0)
+                link.setdefault('visit_count', 0)
+                link.setdefault('created_timestamp', int(time.time()))
+            return links_data
     except (IOError, json.JSONDecodeError) as e:
         print(f"Error loading links: {e}")
         return []
@@ -40,6 +52,9 @@ def add_link_interactive():
         return
 
     title = input("Enter a title (optional, press Enter to use URL as title): ").strip()
+    notes = input("Enter notes (optional): ").strip()
+    is_default_input = input("Mark as default link? (y/n, default n): ").strip().lower()
+    is_default = True if is_default_input == 'y' else False
     
     links = load_links()
     created_ts = int(time.time())
@@ -48,11 +63,11 @@ def add_link_interactive():
         "id": str(uuid.uuid4()),
         "url": url,
         "title": title if title else url,
-        "is_default": False,
+        "notes": notes,                             # New field
+        "is_default": is_default,                   # New field
         "reminder_timestamp": 0,
         "last_visited_timestamp": 0,
         "visit_count": 0,
-        "notes": "",
         "created_timestamp": created_ts
     }
     
@@ -62,20 +77,23 @@ def add_link_interactive():
     print("--------------------")
 
 def view_links_interactive():
-    """Displays all current links with index numbers."""
+    """Displays all current links with index numbers and new fields."""
     links = load_links()
     if not links:
         print("\nNo links to display.")
-        return False # Indicate that no links were displayed
+        return False
 
     print("\n--- Your Links ---")
     for index, link in enumerate(links):
-        print(f"{index + 1}. Title: {link.get('title', 'N/A')}")
+        default_marker = "[Default]" if link.get('is_default') else ""
+        print(f"{index + 1}. Title: {link.get('title', 'N/A')} {default_marker}")
         print(f"   URL: {link.get('url', 'N/A')}")
+        if link.get('notes'):
+            print(f"   Notes: {link.get('notes')}")
         print(f"   ID: {link.get('id', 'N/A')}")
         print("-" * 10)
     print("------------------\n")
-    return True # Indicate that links were displayed
+    return True
 
 def delete_link_interactive():
     """Handles deleting an existing link via user input."""
@@ -85,7 +103,7 @@ def delete_link_interactive():
 
     links = load_links()
     if not links:
-        print("No links available to delete.") # Should be caught by view_links_interactive
+        print("No links available to delete.")
         return
 
     try:
@@ -102,7 +120,8 @@ def delete_link_interactive():
 
         link_to_delete = links[choice - 1]
         
-        confirm = input(f"Are you sure you want to delete '{link_to_delete.get('title', 'N/A')}'? (y/n): ").strip().lower()
+        default_warning = " This is a default link." if link_to_delete.get('is_default') else ""
+        confirm = input(f"Are you sure you want to delete '{link_to_delete.get('title', 'N/A')}'?{default_warning} (y/n): ").strip().lower()
         
         if confirm == 'y':
             deleted_link = links.pop(choice - 1)
@@ -120,11 +139,11 @@ def delete_link_interactive():
 def edit_link_interactive():
     """Handles editing an existing link via user input."""
     print("\n--- Edit Link ---")
-    if not view_links_interactive(): # Display links first
+    if not view_links_interactive():
         return
 
     links = load_links()
-    if not links: # Should be caught by view_links_interactive
+    if not links:
         print("No links available to edit.")
         return
 
@@ -140,33 +159,52 @@ def edit_link_interactive():
             print("Invalid link number. Please try again.")
             return
 
-        link_to_edit_index = choice - 1 # Adjust for 0-based index
+        link_to_edit_index = choice - 1
         link_to_edit = links[link_to_edit_index]
 
         print(f"\nEditing link: '{link_to_edit.get('title', 'N/A')}'")
+        
+        # Edit URL
         print(f"Current URL: {link_to_edit.get('url')}")
         new_url = input(f"Enter new URL (or press Enter to keep current): ").strip()
         if new_url and not (new_url.startswith("http://") or new_url.startswith("https://")):
-            print("Invalid URL format. Must start with http:// or https://. URL not changed.")
-            new_url = link_to_edit.get('url') # Keep old URL
+            print("Invalid URL format. URL not changed.")
+            new_url = link_to_edit.get('url')
         elif not new_url:
-            new_url = link_to_edit.get('url') # Keep old URL if input is empty
+            new_url = link_to_edit.get('url')
 
+        # Edit Title
         print(f"Current Title: {link_to_edit.get('title')}")
         new_title = input(f"Enter new title (or press Enter to keep current): ").strip()
         if not new_title:
-            new_title = link_to_edit.get('title') # Keep old title if input is empty
-        elif not title and new_url: # If title becomes empty but new_url is not, default title to new_url
-             new_title = new_url
+            new_title = link_to_edit.get('title')
+        
+        # Edit Notes
+        print(f"Current Notes: {link_to_edit.get('notes', '')}") # Use .get with default for notes
+        new_notes = input("Enter new notes (or press Enter to keep current): ").strip()
+        if not new_notes and new_notes != '': # If user explicitly enters nothing, keep old notes
+             new_notes = link_to_edit.get('notes', '')
 
+
+        # Edit Default Status
+        current_default_status = "y" if link_to_edit.get('is_default') else "n"
+        print(f"Currently a default link: {current_default_status.upper()}")
+        is_default_input = input(f"Make this a default link? (y/n, Enter to keep '{current_default_status}'): ").strip().lower()
+        new_is_default = link_to_edit.get('is_default') # Keep old value by default
+        if is_default_input == 'y':
+            new_is_default = True
+        elif is_default_input == 'n':
+            new_is_default = False
 
         # Update the link in the list
         links[link_to_edit_index]['url'] = new_url
-        links[link_to_edit_index]['title'] = new_title if new_title else new_url # Ensure title is not empty if URL exists
-        # We could also update a 'modified_timestamp' here if we add one to the link structure
+        links[link_to_edit_index]['title'] = new_title if new_title else new_url
+        links[link_to_edit_index]['notes'] = new_notes
+        links[link_to_edit_index]['is_default'] = new_is_default
+        # links[link_to_edit_index]['modified_timestamp'] = int(time.time()) # Optional: if we track modifications
 
         save_links(links)
-        print(f"Link updated successfully to: '{links[link_to_edit_index]['title']}'")
+        print(f"Link updated successfully: '{links[link_to_edit_index]['title']}'")
 
     except ValueError:
         print("Invalid input. Please enter a number.")
@@ -182,8 +220,8 @@ def main_cli():
         print("1. Add Link")
         print("2. View Links")
         print("3. Delete Link")
-        print("4. Edit Link")   # New option
-        print("5. Exit")        # Exit is now 5
+        print("4. Edit Link")
+        print("5. Exit")
         choice = input("Enter your choice (1-5): ").strip()
 
         if choice == '1':
@@ -192,9 +230,9 @@ def main_cli():
             view_links_interactive()
         elif choice == '3':
             delete_link_interactive()
-        elif choice == '4': # New branch for edit
+        elif choice == '4':
             edit_link_interactive()
-        elif choice == '5': # Exit condition updated
+        elif choice == '5':
             print("Exiting Link Manager. Goodbye!")
             break
         else:
