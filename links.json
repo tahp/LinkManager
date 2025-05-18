@@ -1,0 +1,90 @@
+[
+    {
+        "id": "56cf83dd-edde-4ae6-ad66-484ec73aaa2c",
+        "url": "https://modo.us",
+        "title": "Modo",
+        "notes": "Reset",
+        "is_default": false,
+        "reminder_timestamp": 1747637700,
+        "last_visited_timestamp": 1747595829,
+        "visit_count": 1,
+        "created_timestamp": 1747594003
+    },
+    {
+        "id": "7e4fb457-f9e2-45c7-a515-c28ee652a54d",
+        "url": "https://fortune.com",
+        "title": "Fortune",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 0,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747594848
+    },
+    {
+        "id": "a461e7a0-c3d1-4bd5-b5c1-e3914da9a9fb",
+        "url": "https://goldtreasurecasino.com/lobby",
+        "title": "Golden Treasure",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747614360,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747603590
+    },
+    {
+        "id": "14603952-cffc-4bb1-8ae1-a799a0591df4",
+        "url": "https://spree.com/slots",
+        "title": "Spree",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747627200,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747603769
+    },
+    {
+        "id": "f4484aae-9ee0-4898-93a1-fc07ac844cd5",
+        "url": "https://stake.us",
+        "title": "https://stake.us",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747607580,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747604905
+    },
+    {
+        "id": "d0a1d2fa-e8de-4654-a4c7-9861e417d496",
+        "url": "https://nolimitcoins.com",
+        "title": "https://nolimitcoins.com",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747563300,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747606601
+    },
+    {
+        "id": "b5ed83cd-6e8a-497c-9413-76c91b3813af",
+        "url": "https://www.goldenheartsgames.com/lobby",
+        "title": "Goldenhearts",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747626600,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747607108
+    },
+    {
+        "id": "39f42b35-c8b9-4fd1-bc13-2dd7e815c100",
+        "url": "https://myprize.us",
+        "title": "My Prize",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747612800,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747607499
+    }
+]

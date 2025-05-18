@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add New Link - Interactive Link Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner-container">
+            <h1><i class="fas fa-link"></i> Interactive Link Manager</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('index') }}"><i class="fas fa-list"></i> All Links</a>
+                <a href="{{ url_for('add_link_form') }}"><i class="fas fa-plus-circle"></i> Add New Link</a>
+                <a href="{{ url_for('settings_page') }}"><i class="fas fa-cog"></i> Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages-wrapper">
+          <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="container">
+        <h2>Add New Link</h2>
+        <form method="POST" action="{{ url_for('add_link_action') }}">
+            <div class="form-group">
+                <label for="url">URL:</label>
+                <input type="url" id="url" name="url" value="{{ url | default('', true) }}" required placeholder="https://">
+            </div>
+            <div class="form-group">
+                <label for="title">Title (optional):</label>
+                <input type="text" id="title" name="title" value="{{ title | default('', true) }}" placeholder="e.g., My Favorite News Site">
+                <small>If left blank, title will default to the URL.</small>
+            </div>
+            <div class="form-group">
+                <label for="notes">Notes (optional):</label>
+                <textarea id="notes" name="notes" placeholder="e.g., Check this site daily for updates.">{{ notes | default('', true) }}</textarea>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="is_default" name="is_default" value="yes" {% if is_default_val == 'yes' %}checked{% endif %}>
+                <label for="is_default" style="display: inline;">Set as Default Link</label>
+            </div>
+
+            <div class="form-group">
+                <label for="reminder_time">Reminder Time (optional, for today):</label>
+                <input type="time" id="reminder_time" name="reminder_time" value="{{ reminder_time | default('', true) }}">
+                <small>Sets a reminder for the specified time on today's date.</small>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="button-primary"><i class="fas fa-plus"></i> Add Link</button>
+                <a href="{{ url_for('index') }}" class="button button-secondary cancel-link">Cancel</a>
+            </div>
+        </form>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; {{ "now"|datetime("%Y") }} Interactive Link Manager. All rights reserved.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlInput = document.getElementById('url');
+            const titleInput = document.getElementById('title');
+            
+            // Sticky URL prefix logic
+            if (urlInput) {
+                const defaultPrefix = 'https://';
+                const altPrefix = 'http://';
+
+                const setCursorToEnd = (inputEl) => {
+                    const len = inputEl.value.length;
+                    inputEl.setSelectionRange(len, len);
+                };
+
+                urlInput.addEventListener('focus', function() {
+                    if (this.value.trim() === '') {
+                        this.value = defaultPrefix;
+                        // Ensure cursor is at the end after setting prefix
+                        setTimeout(() => setCursorToEnd(this), 0);
+                    }
+                });
+
+                urlInput.addEventListener('keydown', function(e) {
+                    const val = this.value;
+                    const selectionStart = this.selectionStart;
+                    const selectionEnd = this.selectionEnd;
+
+                    // Prevent deleting the prefix if cursor is within it and selection doesn't extend beyond it
+                    if (e.key === 'Backspace') {
+                        if ((val.startsWith(defaultPrefix) && selectionStart <= defaultPrefix.length && selectionStart === selectionEnd) ||
+                            (val.startsWith(altPrefix) && selectionStart <= altPrefix.length && selectionStart === selectionEnd)) {
+                            // If only the prefix is present, or cursor is at the start of prefix part
+                            if (val === defaultPrefix || val === altPrefix || selectionStart < (val.startsWith(defaultPrefix) ? defaultPrefix.length : altPrefix.length) ) {
+                                e.preventDefault();
+                            }
+                        }
+                    } else if (e.key === 'Delete') {
+                        if ((val.startsWith(defaultPrefix) && selectionStart < defaultPrefix.length && selectionEnd <= defaultPrefix.length) ||
+                            (val.startsWith(altPrefix) && selectionStart < altPrefix.length && selectionEnd <= altPrefix.length)) {
+                             e.preventDefault();
+                        }
+                    }
+                });
+
+                urlInput.addEventListener('input', function() {
+                    // If prefix somehow gets mangled or removed, and field isn't being cleared
+                    if (this.value.trim() !== '' && !this.value.startsWith('http://') && !this.value.startsWith('https://')) {
+                        // User might have pasted something without a protocol, or typed over. Prepend default.
+                        this.value = defaultPrefix + this.value.trim();
+                         setTimeout(() => setCursorToEnd(this), 0); // Move cursor to end after auto-correcting
+                    } else if (this.value === 'http:/' || this.value === 'https:/') {
+                        // Allow typing for the second slash
+                    } else if (this.value.length > 0 && this.value.length < defaultPrefix.length) {
+                        // If user is trying to delete into prefix and somehow bypasses keydown (e.g. cut)
+                        if (defaultPrefix.startsWith(this.value) || altPrefix.startsWith(this.value)) {
+                            // Value is a partial prefix, let keydown handle it or restore on blur
+                        } else if (document.activeElement === this) { // If still focused
+                            this.value = defaultPrefix; // Restore default
+                            setTimeout(() => setCursorToEnd(this), 0);
+                        }
+                    }
+                });
+
+                urlInput.addEventListener('blur', function() {
+                    let currentValue = this.value.trim();
+                    if (currentValue === '' || currentValue === defaultPrefix || currentValue === altPrefix) {
+                        // If field is empty or only contains a prefix, clear it to show placeholder
+                        // (unless user wants prefix to always stay on blur, then comment next line)
+                        // this.value = ''; // Keeping it for now as per "doesn't disappear"
+                    } else if (!currentValue.startsWith('http://') && !currentValue.startsWith('https://')) {
+                        this.value = defaultPrefix + currentValue;
+                    }
+                });
+            }
+
+            // Title mirroring JS
+            if (urlInput && titleInput) {
+                let titleManuallyEdited = (titleInput.value.trim() !== '' && (urlInput.value.trim() === '' || titleInput.value.trim() !== urlInput.value.trim()));
+
+                titleInput.addEventListener('input', function() {
+                    if (titleInput.value.trim() === '' || titleInput.value.trim() === urlInput.value.trim()) {
+                        titleManuallyEdited = false;
+                    } else {
+                        titleManuallyEdited = true;
+                    }
+                });
+
+                urlInput.addEventListener('input', function() { // Also trigger on 'input' for immediate mirroring
+                    if (!titleManuallyEdited) {
+                        titleInput.value = urlInput.value;
+                    }
+                });
+
+                if (!titleManuallyEdited && titleInput.value.trim() === '' && urlInput.value.trim() !== '') {
+                    titleInput.value = urlInput.value;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+

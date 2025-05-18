@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Link Manager - Home</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner-container">
+            <h1><i class="fas fa-link"></i> Interactive Link Manager</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('index') }}"><i class="fas fa-list"></i> All Links</a>
+                <a href="{{ url_for('add_link_form') }}"><i class="fas fa-plus-circle"></i> Add New Link</a>
+                <a href="{{ url_for('settings_page') }}"><i class="fas fa-cog"></i> Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages-wrapper">
+          <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="container">
+        {% if links %}
+            <div class="table-responsive-wrapper">
+                <table class="responsive-card-table link-table">
+                    <thead>
+                        <tr>
+                            <th>
+                                <a href="{{ url_for('index', page=current_page, sort_by='title', sort_order='desc' if sort_by == 'title' and sort_order == 'asc' else 'asc') }}" class="sort-link">
+                                    <span class="sort-text">Link Details</span>
+                                    {% if sort_by == 'title' %}<i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                                    {% else %}<i class="fas fa-sort sort-icon-default"></i>{% endif %}
+                                </a>
+                            </th>
+                            {# Removed "Actions" header #}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for link in links %}
+                        <tr>
+                            <td class="title-cell"> 
+                                <div class="title-and-bonus">
+                                    <a href="{{ link.url }}" target="_blank" title="Visit: {{ link.url }}" class="link-title-text">{{ link.title }}</a>
+                                    {% if link.reminder_status_info and link.reminder_status_info.status != 'n_a' %}
+                                        <span class="bonus-time-inline time-status-{{ link.reminder_status_info.status }}">
+                                            ({{ link.reminder_status_info.display_time }})
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <a href="{{ url_for('edit_link_form', link_id=link.id) }}" class="edit-link-icon" title="Edit '{{ link.title|escape|replace("'", "\\'") }}'">
+                                    <i class="fas fa-cog"></i>
+                                </a>
+                            </td>
+                            {# Removed "Actions" data cell #}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if total_pages > 1 %}
+            <div class="pagination">
+                {% if current_page > 1 %}
+                    <a href="{{ url_for('index', page=current_page-1, sort_by=sort_by, sort_order=sort_order) }}">Previous</a>
+                {% else %}
+                    <span class="disabled">Previous</span>
+                {% endif %}
+
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == current_page %}
+                        <span class="current">{{ p }}</span>
+                    {% else %}
+                        <a href="{{ url_for('index', page=p, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if current_page < total_pages %}
+                    <a href="{{ url_for('index', page=current_page+1, sort_by=sort_by, sort_order=sort_order) }}">Next</a>
+                {% else %}
+                    <span class="disabled">Next</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        {% else %}
+            <p class="text-center">No links found. <a href="{{ url_for('add_link_form') }}">Add your first link!</a></p>
+        {% endif %}
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; {{ "now"|datetime("%Y") }} Interactive Link Manager. All rights reserved.</p>
+    </footer>
+</body>
+</html>
+
