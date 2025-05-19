@@ -1,5 +1,5 @@
 blinker==1.9.0
-Brotli @ file:///home/runner/.termux-build/python-brotli/src
+Brotli 
 certifi==2025.4.26
 charset-normalizer==3.4.2
 click==8.2.0
