@@ -1,0 +1,157 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS Numbers Image</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0; /* Light background for contrast */
+            margin: 0;
+            font-family: Arial, sans-serif; /* Fallback font */
+        }
+
+        .image-container {
+            width: 300px; /* As indicated in the image */
+            border: 2px solid black;
+            border-radius: 10px;
+            background-color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            overflow: hidden; /* To ensure rounded corners clip content */
+        }
+
+        .header-bar {
+            background-color: black;
+            color: white;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .header-bar .title {
+            font-weight: bold;
+        }
+
+        .header-bar .close-button {
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .numbers-area {
+            position: relative;
+            height: 400px; /* Adjust as needed to fit numbers */
+            padding: 10px;
+            box-sizing: border-box; /* Include padding in width/height */
+        }
+
+        .number {
+            position: absolute;
+            font-family: 'Arial Black', 'Impact', Gadget, sans-serif; /* Chunky font */
+            font-weight: 900; /* Or bold, depending on font */
+            color: #D93A3E; /* Reddish color from image */
+            -webkit-text-stroke: 2px black; /* Outline for WebKit browsers */
+            text-stroke: 2px black; /* Standard text outline */
+            /* Fallback for browsers not supporting text-stroke */
+            text-shadow:
+                -2px -2px 0 black,
+                 2px -2px 0 black,
+                -2px  2px 0 black,
+                 2px  2px 0 black;
+            line-height: 1;
+            user-select: none; /* Prevent text selection */
+        }
+
+        /*
+        Approximate positions and sizes.
+        You'll likely need to fine-tune these values.
+        The z-index controls stacking order (higher is on top).
+        */
+
+        .number.n8-top {
+            font-size: 150px;
+            top: 5px;
+            left: 10px;
+            z-index: 2;
+        }
+
+        .number.n2 {
+            font-size: 160px;
+            top: 70px;
+            left: 5px;
+            z-index: 3;
+        }
+
+        .number.n3 {
+            font-size: 180px;
+            top: 60px;
+            left: 110px;
+            z-index: 2;
+        }
+        
+        .number.n4 {
+            font-size: 100px;
+            top: 130px;
+            left: 15px;
+            z-index: 1;
+        }
+
+        .number.n1 {
+            font-size: 130px;
+            top: 150px;
+            left: 90px;
+            z-index: 1;
+        }
+
+        .number.n9 {
+            font-size: 170px;
+            top: 200px;
+            left: 100px;
+            z-index: 3;
+        }
+
+        .number.n8-bottom {
+            font-size: 120px;
+            top: 230px;
+            left: -10px; /* Allow parts to be "cut off" */
+            z-index: 2;
+        }
+
+        .number.n0-fragment { /* Or could be bottom of 6 or 9 */
+            font-size: 90px;
+            top: 320px;
+            left: 70px;
+            z-index: 1;
+            clip-path: inset(50% 0 0 0); /* Show only bottom part */
+        }
+
+
+    </style>
+</head>
+<body>
+
+    <div class="image-container">
+        <div class="header-bar">
+            <span class="title">300px</span>
+            <span class="close-button">×</span>
+        </div>
+        <div class="numbers-area">
+            <div class="number n4">4</div>
+            <div class="number n1">1</div>
+            <div class="number n0-fragment">0</div> <div class="number n8-top">8</div>
+            <div class="number n3">3</div>
+            <div class="number n8-bottom">8</div>
+
+            <div class="number n2">2</div>
+            <div class="number n9">9</div>
+        </div>
+    </div>
+
+</body>
+</html>
