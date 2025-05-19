@@ -13,7 +13,8 @@ body {
     background-color: #f8f9fa;
     color: #343a40;
     margin: 0;
-    padding-bottom: 60px;
+    padding-bottom: 60px; /* For footer */
+    padding-top: 80px; /* Added to prevent content from hiding behind fixed header */
 }
 
 /* --- Main Container for Content --- */
@@ -60,9 +61,13 @@ a:hover {
 .site-header {
     background-color: #343a40;
     color: #ffffff;
-    padding: 1em 0;
-    margin-bottom: 30px;
+    padding: 0.8em 0; /* Adjusted padding */
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: fixed; /* Make header fixed */
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000; /* Ensure it's above other content */
 }
 
 .site-header .header-inner-container {
@@ -70,50 +75,106 @@ a:hover {
     margin: 0 auto;
     padding: 0 20px;
     display: flex;
-    flex-direction: column;
+    justify-content: space-between; /* Space out title and hamburger */
     align-items: center;
+    position: relative; /* For absolute positioning of nav */
 }
 
 .site-header h1 {
     color: #ffffff;
-    margin-bottom: 0.5em;
-    font-size: 2rem;
-    text-align: center;
+    margin-bottom: 0; /* Removed margin */
+    font-size: 1.8rem; /* Slightly adjusted size */
     font-weight: 600;
 }
-
-.site-header h1 i {
-    margin-right: 0.3em;
-    font-size: 0.9em;
-    color: #00c6ff;
+.site-header h1 a.header-title-link {
+    color: inherit;
+    text-decoration: none;
+}
+.site-header h1 a.header-title-link:hover {
+    text-decoration: none;
+    opacity: 0.9;
 }
 
+
+.site-header h1 i {
+    margin-right: 0.4em; /* Adjusted margin */
+    font-size: 0.9em;
+    color: #00c6ff; /* Or your preferred color */
+}
+
+/* Hamburger Menu Button */
+.hamburger-menu {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 1.5rem; /* Size of the hamburger icon */
+    cursor: pointer;
+    padding: 0.5em;
+    display: block; /* Always display */
+    line-height: 1; /* Ensure icon is vertically centered */
+}
+
+.hamburger-menu:hover {
+    opacity: 0.8;
+}
+
+.hamburger-menu i {
+    display: block; /* Helps with some icon alignment issues */
+}
+
+
+/* Navigation Menu (Dropdown) */
 .site-header .main-nav {
-    margin-bottom: 0;
-    text-align: center;
+    display: none; /* Hidden by default */
+    position: absolute;
+    top: 100%; /* Position below the header */
+    right: 0; /* Align to the right of the header-inner-container */
+    background-color: #3f464c; /* Slightly different from header for distinction */
+    min-width: 220px; /* Minimum width for the dropdown */
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    border-radius: 0 0 6px 6px;
+    padding: 0.5em 0; /* Padding for top/bottom of nav group */
+    z-index: 999; /* Below header but above other content */
+}
+
+.site-header .main-nav.active {
+    display: block; /* Show when active */
 }
 
 .site-header .main-nav a {
     color: #f8f9fa;
-    padding: 0.5em 1em;
-    border-radius: 4px;
-    margin: 0 0.5em;
+    padding: 0.8em 1.5em; /* Padding for nav links */
+    display: block; /* Make links take full width of nav */
+    text-decoration: none;
     font-weight: 500;
+    border-radius: 0; /* No border-radius for individual links needed now */
+    margin: 0; /* No margin between links needed now */
+    border-bottom: 1px solid #495057; /* Separator line */
+}
+.site-header .main-nav a:last-child {
+    border-bottom: none; /* No border for the last link */
 }
 
+
 .site-header .main-nav a:hover,
-.site-header .main-nav a.active {
+.site-header .main-nav a.active-nav-item { /* Optional: for active page indication if needed later */
     background-color: #495057;
     color: #ffffff;
-    text-decoration: none;
 }
+.site-header .main-nav a i {
+    margin-right: 0.8em; /* More space for icons in dropdown */
+    width: 20px; /* Align icons nicely */
+    text-align: center;
+}
+
 
 /* --- Flash Messages --- */
 .flash-messages-wrapper {
     max-width: 960px;
-    margin: 0 auto 20px auto;
+    margin: 20px auto 20px auto; /* Adjusted top margin due to fixed header */
     padding: 0 20px;
 }
+/* ... (rest of flash message styles remain the same) ... */
 .flash-messages {
     list-style-type: none;
     padding: 0;
@@ -133,6 +194,7 @@ a:hover {
 
 
 /* --- Forms --- */
+/* ... (form styles remain the same) ... */
 form {
     margin-top: 20px;
 }
@@ -150,24 +212,24 @@ textarea { min-height: 120px; resize: vertical; }
 input[type="checkbox"] { margin-right: 8px; vertical-align: middle; width: 1.1em; height: 1.1em; }
 input[type="checkbox"] + label { display: inline-block; font-weight: normal; vertical-align: middle; }
 .form-group small { display: block; margin-top: 0.4em; font-size: 0.875em; color: #6c757d; }
-.form-actions { 
-    margin-top: 30px; 
-    padding-top: 20px; 
-    border-top: 1px solid #e9ecef; 
-    display: flex; 
-    gap: 10px; 
-    flex-wrap: wrap; 
+.form-actions {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
     align-items: center;
 }
 .edit-page-actions {
-    justify-content: flex-start; 
+    justify-content: flex-start;
 }
 .edit-page-actions .delete-link-form-edit-page {
-    margin-left: auto; 
+    margin-left: auto;
 }
 
-
 /* --- Buttons --- */
+/* ... (button styles remain largely the same, check icon margin if needed) ... */
 button, input[type="submit"], .button, a.button-style {
     display: inline-block; padding: 12px 20px; font-size: 1rem; font-weight: 500;
     line-height: 1.5; text-align: center; vertical-align: middle; cursor: pointer;
@@ -188,10 +250,12 @@ button:active, input[type="submit"]:active, .button:active, a.button-style:activ
 .button-danger:hover { background-color: #c82333; border-color: #bd2130; color: #ffffff; }
 
 /* --- Icon Adjustments --- */
-.main-nav a i, button i, .button i { margin-right: 0.5em; }
+/* .main-nav a i (handled above), button i, .button i { margin-right: 0.5em; } */ /* Original general rule, specific icon rules might be better */
+button i, .button i { margin-right: 0.5em; }
 
 
 /* --- Tables (`index.html`) --- */
+/* ... (table styles remain the same) ... */
 .table-responsive-wrapper {
     overflow-x: auto;
     margin-bottom: 1rem;
@@ -219,7 +283,7 @@ thead th {
     color: #495057;
     font-weight: 600;
     border-bottom-width: 2px;
-    position: relative; 
+    position: relative;
 }
 thead th a.sort-link {
     color: inherit; text-decoration: none; display: flex; align-items: center;
@@ -231,24 +295,24 @@ thead th a.sort-link i.fas { margin-left: 0.3em; font-size: 0.9em; flex-shrink: 
 thead th a.sort-link i.sort-icon-default { color: #adb5bd; opacity: 0.6; }
 
 tbody tr:hover { /* General hover for desktop rows */
-    background-color: #e0e0e0; 
+    background-color: #e0e0e0;
 }
 
 /* Styling for title cell (Desktop View) */
 td.title-cell {
     display: flex;
     align-items: center;
-    justify-content: flex-start; 
+    justify-content: flex-start;
 }
 .title-and-bonus {
     display: flex;
     align-items: baseline;
     gap: 0.6em;
-    flex-grow: 1; 
-    min-width: 0; 
+    flex-grow: 1;
+    min-width: 0;
 }
 td.title-cell .link-title-text {
-    word-break: break-word; 
+    word-break: break-word;
     text-decoration: underline;
     color: #007bff;
 }
@@ -257,28 +321,29 @@ td.title-cell .link-title-text:hover {
 }
 .bonus-time-inline {
     font-size: 0.85em;
-    color: #6c757d; 
+    color: #6c757d;
     white-space: nowrap;
-    margin-left: 0.2em; 
+    margin-left: 0.2em;
 }
 td.title-cell a.edit-link-icon {
     color: #6c757d;
-    font-size: 0.95em; 
+    font-size: 0.95em;
     text-decoration: none;
     flex-shrink: 0;
     line-height: 1;
     transition: color 0.2s ease-in-out;
-    margin-left: 0.75em; 
+    margin-left: 0.75em;
 }
 td.title-cell a.edit-link-icon:hover {
     color: #007bff;
 }
 
-td.actions { white-space: nowrap; text-align: right; } 
-td.actions form { display: inline-block; margin: 0; } 
+td.actions { white-space: nowrap; text-align: right; }
+td.actions form { display: inline-block; margin: 0; }
 
 
 /* --- Navigation Elements (Pagination) --- */
+/* ... (pagination styles remain the same) ... */
 .pagination { margin-top: 25px; text-align: center; }
 .pagination a, .pagination span {
     display: inline-block; padding: 8px 12px; margin: 0 4px;
@@ -301,19 +366,23 @@ td.actions form { display: inline-block; margin: 0; }
 .text-center { text-align: center !important; }
 
 /* --- Time Status Colors --- */
-.time-status-upcoming_today { color: #28a745; }
-.time-status-elapsed_today { color: #dc3545; }
+/* ... (time status styles remain the same) ... */
+.time-status-upcoming_today { color: #28a745; } /* Note: Your JS uses 'upcoming' and 'elapsed' now */
+.time-status-elapsed_today { color: #dc3545; } /* Note: Your JS uses 'upcoming' and 'elapsed' now */
+.time-status-upcoming { color: #28a745; font-weight: bold; }
+.time-status-elapsed { color: #dc3545; font-weight: bold; }
 .time-status-n_a { color: #6c757d; font-style: italic; }
-.bonus-time-inline .time-status-upcoming_today,
-.bonus-time-inline .time-status-elapsed_today {
+.bonus-time-inline .time-status-upcoming,
+.bonus-time-inline .time-status-elapsed {
     font-weight: bold;
 }
 
-/* --- Zebra-striping for table rows (Replaces display:none for hiding rows) --- */
+
+/* --- Zebra-striping for table rows --- */
+/* ... (zebra styles remain the same) ... */
 table.responsive-card-table tbody tr:nth-child(even) {
     background-color: #f9f9f9; /* Light gray for even rows in desktop */
 }
-/* Ensure hover is still distinct from zebra stripes */
 table.responsive-card-table tbody tr:nth-child(odd):hover { /* Hover for odd rows */
     background-color: #e9ecef;
 }
@@ -323,28 +392,41 @@ table.responsive-card-table tbody tr:nth-child(even):hover { /* Hover for even r
 
 
 /* --- Basic Responsiveness --- */
-@media (min-width: 768px) {
+/* Remove or adjust old header responsive rules as hamburger is now always on */
+/* @media (min-width: 768px) {
     .site-header .header-inner-container { flex-direction: row; justify-content: space-between; align-items: center; }
     .site-header h1 { text-align: left; margin-bottom: 0; }
-    .site-header .main-nav { text-align: right; }
-}
+    .site-header .main-nav { text-align: right; } // This whole block might be obsolete
+} */
 
 @media (max-width: 768px) {
-    body { padding: 10px 10px 60px 10px; }
-    .container { padding: 20px 15px; margin: 10px auto; }
-    .site-header h1 { font-size: 1.7rem; }
+    body {
+        /* padding-top value should be similar to header height */
+        /* padding: 10px 10px 60px 10px; */ /* Original */
+    }
+    .container { padding: 20px 15px; /* margin: 10px auto; */ } /* Top margin handled by body padding-top */
+    .site-header h1 { font-size: 1.5rem; }
     h2 { font-size: 1.5rem; }
+
+    .site-header .main-nav {
+        /* On smaller screens, you might want the nav to take full width */
+        left: 0;
+        right: 0;
+        min-width: auto;
+        border-radius: 0;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
     
     .form-actions, .edit-page-actions {
-        flex-direction: column; 
-        align-items: stretch; 
+        flex-direction: column;
+        align-items: stretch;
     }
     .form-actions button, .form-actions a.button,
     .edit-page-actions button, .edit-page-actions a.button,
     .edit-page-actions .delete-link-form-edit-page,
-    .edit-page-actions .delete-link-form-edit-page button { 
-        width: 100%; 
-        margin-bottom: 10px; 
+    .edit-page-actions .delete-link-form-edit-page button {
+        width: 100%;
+        margin-bottom: 10px;
         margin-left: 0;
     }
     .form-actions > *:last-child,
@@ -353,18 +435,18 @@ table.responsive-card-table tbody tr:nth-child(even):hover { /* Hover for even r
         margin-bottom: 0;
     }
      .edit-page-actions .delete-link-form-edit-page {
-        margin-left: 0; 
+        margin-left: 0;
     }
 
     /* Responsive Table - Card View */
+    /* ... (responsive table styles remain largely the same) ... */
     .table-responsive-wrapper { overflow-x: visible; }
     table.responsive-card-table { border: none; box-shadow: none; background-color: transparent; width: 100%; }
     table.responsive-card-table thead { display: none; }
-    
+
     table.responsive-card-table tbody tr { /* This is the card */
         display: block; margin-bottom: 20px; border: 1px solid #e0e0e0;
-        border-radius: 8px; padding: 15px; 
-        /* background-color will be set by nth-child for zebra striping */
+        border-radius: 8px; padding: 15px;
         box-shadow: 0 3px 6px rgba(0,0,0,0.06);
     }
     table.responsive-card-table tbody tr:nth-child(odd) {
@@ -373,53 +455,53 @@ table.responsive-card-table tbody tr:nth-child(even):hover { /* Hover for even r
     table.responsive-card-table tbody tr:nth-child(even) {
         background-color: #f9f9f9; /* Zebra for even cards */
     }
-    table.responsive-card-table tbody tr:hover { 
+    table.responsive-card-table tbody tr:hover {
         background-color: #f0f0f0 !important; /* Unified hover for cards, !important to override nth-child */
-        box-shadow: 0 5px 10px rgba(0,0,0,0.08); 
+        box-shadow: 0 5px 10px rgba(0,0,0,0.08);
     }
-    
-    table.responsive-card-table td { 
-        display: block; 
+
+    table.responsive-card-table td {
+        display: block;
         padding: 10px 0;
         border-bottom: 1px dashed #f0f0f0;
         font-size: 0.95rem;
-        position: relative; 
-        text-align: left; 
+        position: relative;
+        text-align: left;
     }
     table.responsive-card-table td:last-of-type { border-bottom: none; }
-    
-    table.responsive-card-table td[data-label]::before { 
+
+    table.responsive-card-table td[data-label]::before {
         content: attr(data-label);
-        display: block; 
+        display: block;
         font-weight: 600;
-        margin-bottom: 0.3em; 
+        margin-bottom: 0.3em;
         color: #555;
         text-align: left;
     }
 
     table.responsive-card-table td.title-cell { /* Title cell in card view */
         display: flex;
-        flex-direction: row; 
+        flex-direction: row;
         align-items: center;
-        padding: 10px 0 !important; 
+        padding: 10px 0 !important;
         text-align: left;
-        border-top: none; 
+        border-top: none;
     }
     table.responsive-card-table td.title-cell::before {
-        display: none !important; 
+        display: none !important;
     }
 
     table.responsive-card-table td.title-cell .title-and-bonus {
-        display: flex; 
+        display: flex;
         align-items: baseline;
-        flex-wrap: wrap; 
+        flex-wrap: wrap;
         min-width: 0;
-        flex-grow: 1; 
-        margin-right: 8px; 
+        flex-grow: 1;
+        margin-right: 8px;
     }
     table.responsive-card-table td.title-cell .link-title-text {
         word-break: break-word;
-        margin-right: 0.5em; 
+        margin-right: 0.5em;
     }
     table.responsive-card-table td.title-cell .bonus-time-inline {
         font-size: 0.85em;
@@ -427,17 +509,17 @@ table.responsive-card-table tbody tr:nth-child(even):hover { /* Hover for even r
         flex-shrink: 0;
     }
     table.responsive-card-table td.title-cell a.edit-link-icon {
-        font-size: 1em; 
-        color: #007bff; 
-        flex-shrink: 0; 
-        margin-left: auto; 
+        font-size: 1em;
+        color: #007bff;
+        flex-shrink: 0;
+        margin-left: auto;
     }
-    
-    table.responsive-card-table td[data-label="Actions"] { 
+
+    table.responsive-card-table td[data-label="Actions"] {
         text-align: right; padding-top: 15px; border-top: 1px solid #f0f0f0; margin-top: 10px;
     }
-    table.responsive-card-table td[data-label="Actions"]::before { 
-        display: none; 
+    table.responsive-card-table td[data-label="Actions"]::before {
+        display: none;
     }
     /* END Responsive Table - Card View */
 
@@ -445,38 +527,37 @@ table.responsive-card-table tbody tr:nth-child(even):hover { /* Hover for even r
 }
 
 @media (max-width: 480px) {
-    .site-header h1 { font-size: 1.5rem; }
+    .site-header h1 { font-size: 1.3rem; } /* Further reduce title size */
     h2 { font-size: 1.3rem; }
-    .site-header .main-nav a { display: block; margin: 5px auto; padding: 0.8em; width: fit-content; }
+    /* .site-header .main-nav a { display: block; margin: 5px auto; padding: 0.8em; width: fit-content; } */ /* Old rule for non-dropdown */
+
+    .site-header .main-nav {
+        /* Ensure full width on very small screens if not already covered */
+    }
 
     table.responsive-card-table td:not(.title-cell),
-    table.responsive-card-table td.title-cell { 
-        padding-left: 0; 
-        display: block; 
-        text-align: left; 
-    }
-    table.responsive-card-table td[data-label]::before { 
-        /* float: none; */ /* Already not floated */
-        /* display: block; width: auto;  */ /* Already block */
-        /* margin-right: 0; margin-bottom: 5px;  */ /* Adjusted */
-        /* position: static; padding-right:0; */
+    table.responsive-card-table td.title-cell {
+        padding-left: 0;
+        display: block;
+        text-align: left;
     }
     
     table.responsive-card-table td.title-cell .title-and-bonus {
-        flex-direction: column; 
+        flex-direction: column;
         align-items: flex-start;
         gap: 0.2em;
-        margin-right: 0; 
-        margin-bottom: 0.5em; 
+        margin-right: 0;
+        margin-bottom: 0.5em;
     }
     table.responsive-card-table td.title-cell a.edit-link-icon {
-        margin-left: 0; 
-        margin-top: 0.5em; 
-        align-self: flex-start; 
+        margin-left: 0;
+        margin-top: 0.5em;
+        align-self: flex-start;
     }
 
     table.responsive-card-table td.actions { text-align: center; }
     table.responsive-card-table td.actions form { display: block; width: 100%; margin: 8px 0; }
     table.responsive-card-table td.actions form button { width: 100%; }
 }
+
 
