@@ -263,7 +263,7 @@ button i, .button i { margin-right: 0.5em; }
 }
 table {
     width: 100%;
-    font-size:26px;
+    
     overflow: hidden;
     text-overflow: ellipses;
     margin-bottom: 1.5rem;
@@ -295,7 +295,7 @@ thead th a.sort-link {
 }
 thead th a.sort-link:hover { color: #007bff; text-decoration: none; }
 thead th a.sort-link .sort-text { margin-right: 0.5em; }
-thead th a.sort-link i.fas { margin-left: 0.3em; font-size: 0.9em; flex-shrink: 0; }
+thead th a.sort-link i.fas { margin-left: 0.3em; font-size: 2em; flex-shrink: 0; }
 thead th a.sort-link i.sort-icon-default { color: #adb5bd; opacity: 0.6; }
 
 tbody tr:hover { /* General hover for desktop rows */
