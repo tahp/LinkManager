@@ -507,12 +507,12 @@ table.responsive-card-table tbody tr:nth-child(even):hover { /* Hover for even r
         margin-right: 0.5em;
     }
     table.responsive-card-table td.title-cell .bonus-time-inline {
-        font-size: 0.85em;
+        font-size: 50px;
         white-space: nowrap;
         flex-shrink: 0;
     }
     table.responsive-card-table td.title-cell a.edit-link-icon {
-        font-size: 1em;
+        font-size: 50px;
         color: #007bff;
         flex-shrink: 0;
         margin-left: auto;
