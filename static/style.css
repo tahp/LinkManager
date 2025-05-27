@@ -263,6 +263,7 @@ button i, .button i { margin-right: 0.5em; }
 }
 table {
     width: 100%;
+    font-size:50px;
     overflow: hidden;
     text-overflow: ellipses;
     margin-bottom: 1.5rem;
@@ -271,7 +272,7 @@ table {
 }
 table:not(.responsive-card-table) {
     border-radius: 6px;
-    font-size:50px;
+    
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
