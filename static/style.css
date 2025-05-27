@@ -52,7 +52,7 @@ a {
     transition: all 0.2s ease-in-out;
 }
 
-a:hover {
+a:hove5r {
     color: #0056b3;
     text-decoration: underline;
 }
@@ -295,7 +295,7 @@ thead th a.sort-link {
 }
 thead th a.sort-link:hover { color: #007bff; text-decoration: none; }
 thead th a.sort-link .sort-text { margin-right: 0.5em; }
-thead th a.sort-link i.fas { margin-left: 0.3em; font-size: 2em; flex-shrink: 0; }
+thead th a.sort-link i.fas { margin-left: 0.3em; font-size:12px; flex-shrink: 0; }
 thead th a.sort-link i.sort-icon-default { color: #adb5bd; opacity: 0.6; }
 
 tbody tr:hover { /* General hover for desktop rows */
@@ -324,7 +324,7 @@ td.title-cell .link-title-text:hover {
     color: #0056b3;
 }
 .bonus-time-inline {
-    font-size: 0.85em;
+    font-size: 0.2em;
     color: #6c757d;
     white-space: nowrap;
     margin-left: 0.2em;
