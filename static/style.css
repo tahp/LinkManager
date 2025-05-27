@@ -330,7 +330,7 @@ td.title-cell .link-title-text:hover {
 }
 td.title-cell a.edit-link-icon {
     color: #6c757d;
-    font-size: 0.95em;
+    font-size: 2.5em;
     text-decoration: none;
     flex-shrink: 0;
     line-height: 1;
