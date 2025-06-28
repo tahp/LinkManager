@@ -1,4 +1,2554 @@
-here are the files
+Here's an app im working on. I want you to modify it to have a dark theme instead. Fix anything that's broken and feel free to modify anything if you see something that would make it more functional
 
-app.py
+# app.py
 
+from flask import Flask, render_template, request, redirect, url_for, flash
+import link_core # Your refactored core logic
+import os
+from datetime import datetime as dt # Aliased to avoid conflict with Jinja filter
+import time
+
+app = Flask(__name__) # Create the Flask app instance
+
+# MODIFIED LINE: Set the secret key from an environment variable
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'a_very_strong_random_default_secret_for_dev_only_32_chars_MAKE_SURE_THIS_IS_DIFFERENT_AND_STRONG_IN_PROD')
+
+# --- Custom Jinja2 Filter for datetime formatting ---
+def format_datetime_filter(value, fmt=None):
+    if value == "now":
+        value = dt.now()
+    if not isinstance(value, dt):
+        try:
+            value = dt.fromtimestamp(int(value))
+        except (ValueError, TypeError, OSError):
+            try:
+                value = dt.fromisoformat(str(value))
+            except (ValueError, TypeError):
+                 return str(value)
+
+    if fmt:
+        return value.strftime(fmt)
+    return value.strftime(link_core.get_active_date_format_str())
+app.jinja_env.filters['datetime'] = format_datetime_filter
+
+
+# --- Helper for timestamp to date/time string conversion ---
+def _ts_to_datetime_strings(timestamp):
+    if not timestamp or timestamp == 0:
+        return "", ""
+    try:
+        dt_obj = dt.fromtimestamp(timestamp)
+        return dt_obj.strftime('%Y-%m-%d'), dt_obj.strftime('%H:%M')
+    except (ValueError, TypeError, OSError):
+        return "", ""
+
+@app.context_processor
+def inject_global_vars():
+    if not link_core.CONFIG:
+        print("Warning: link_core.CONFIG not loaded. Attempting to load now.")
+        link_core.load_config() # This will now try to load from KV first
+    return dict(
+        APP_CONFIG=link_core.CONFIG,
+        format_timestamp=link_core.format_web_timestamp
+    )
+
+@app.route('/')
+@app.route('/links')
+def index():
+    all_links = link_core.get_all_links() # This will now get from KV
+
+    sort_by_param = request.args.get('sort_by')
+    sort_order_param = request.args.get('sort_order')
+
+    if sort_by_param:
+        current_sort_by = sort_by_param
+        current_sort_order = sort_order_param if sort_order_param in ['asc', 'desc'] else 'asc'
+    else:
+        current_sort_by = 'reminder_time'
+        current_sort_order = 'asc'
+
+    displayable_links_intermediate = link_core.core_sort_links(all_links, current_sort_by, current_sort_order)
+
+    page = request.args.get('page', 1, type=int)
+    # Ensure CONFIG is loaded before accessing page_size
+    page_size = link_core.CONFIG.get('page_size', 20) if link_core.CONFIG else 20
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+
+    paginated_links_slice = displayable_links_intermediate[start_index:end_index]
+
+    processed_paginated_links = []
+    for link in paginated_links_slice:
+        link_copy = link.copy()
+        link_copy['reminder_status_info'] = link_core.get_daily_time_status(link_copy.get('reminder_timestamp', 0))
+        processed_paginated_links.append(link_copy)
+
+    total_pages = (len(displayable_links_intermediate) + page_size - 1) // page_size
+
+    return render_template('index.html',
+                           links=processed_paginated_links,
+                           current_page=page,
+                           total_pages=total_pages,
+                           sort_by=current_sort_by,
+                           sort_order=current_sort_order)
+
+
+@app.route('/add', methods=['GET'])
+def add_link_form():
+    return render_template('add_link.html',
+                           url=request.args.get('url', ''),
+                           title=request.args.get('title', ''),
+                           notes=request.args.get('notes', ''),
+                           is_default_val=request.args.get('is_default_val'),
+                           reminder_time=request.args.get('reminder_time', ''))
+
+@app.route('/add', methods=['POST'])
+def add_link_action():
+    url = request.form.get('url', '').strip()
+    title = request.form.get('title', '').strip()
+    notes = request.form.get('notes', '').strip()
+    is_default_val = request.form.get('is_default')
+    is_default = (is_default_val == 'yes')
+    reminder_time_str = request.form.get('reminder_time', "").strip()
+    reminder_ts = 0
+    if reminder_time_str:
+        try:
+            parsed_time_obj = dt.strptime(reminder_time_str, '%H:%M').time()
+            todays_date = dt.now().date()
+            reminder_dt_obj = dt.combine(todays_date, parsed_time_obj)
+            current_system_dt = dt.now()
+            if reminder_dt_obj < current_system_dt and (current_system_dt - reminder_dt_obj).total_seconds() > 60:
+                flash("Warning: Reminder time is in the past for today.", "warning")
+            reminder_ts = int(reminder_dt_obj.timestamp())
+        except ValueError:
+            flash("Invalid reminder time format. Reminder not set.", "error")
+            reminder_ts = 0
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        flash("URL is required and must start with http:// or https://.", "error")
+        return render_template('add_link.html', url=url, title=title, notes=notes,
+                               is_default_val=is_default_val,
+                               reminder_time=reminder_time_str), 400
+    result = link_core.add_new_link( # This will now use KV
+        url=url, title=title, notes=notes, is_default=is_default, reminder_timestamp=reminder_ts
+    )
+    if isinstance(result, dict):
+        new_link_title = result.get('title', result.get('url'))
+        flash(f"Link '{new_link_title}' added successfully!", "success")
+        return redirect(url_for('index'))
+    elif result == "duplicate_url":
+        flash(f"The URL '{url}' already exists. Link not added.", "error")
+        return render_template('add_link.html',
+                               url=url, title=title, notes=notes,
+                               is_default_val=request.form.get('is_default'),
+                               reminder_time=reminder_time_str
+                              ), 409
+    else:
+        flash("Failed to add link. An internal error occurred.", "error")
+        return render_template('add_link.html',
+                               url=url, title=title, notes=notes,
+                               is_default_val=request.form.get('is_default'),
+                               reminder_time=reminder_time_str
+                               ), 500
+
+@app.route('/edit/<link_id>', methods=['GET', 'POST'])
+def edit_link_form(link_id):
+    link_to_edit = link_core.get_link_by_id(link_id) # This will now use KV
+    if not link_to_edit:
+        flash(f"Error: Link with ID {link_id} not found.", "error")
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        url = request.form.get('url', '').strip()
+        title = request.form.get('title', '').strip()
+        if not url or not (url.startswith("http://") or url.startswith("https://")):
+            flash("URL is required and must start with http:// or https://.", "error")
+            _original_date_str, original_time_str = _ts_to_datetime_strings(link_to_edit.get('reminder_timestamp', 0))
+            submitted_reminder_time_val = request.form.get('reminder_time', original_time_str)
+            current_form_state_for_link = {
+                'id': link_id, 'url': url, 'title': title,
+                'notes': link_to_edit.get('notes', ''),
+                'is_default': link_to_edit.get('is_default', False)
+            }
+            return render_template('edit_link.html',
+                                   link=current_form_state_for_link,
+                                   reminder_time_val=submitted_reminder_time_val,
+                                   error_source='validation'), 400
+        original_reminder_ts = link_to_edit.get('reminder_timestamp', 0)
+        new_reminder_ts = original_reminder_ts
+        submitted_reminder_time_str = request.form.get('reminder_time', "").strip()
+        if not submitted_reminder_time_str:
+            if original_reminder_ts != 0:
+                 flash("Reminder time cleared.", "info")
+            new_reminder_ts = 0
+        else:
+            try:
+                parsed_time_obj = dt.strptime(submitted_reminder_time_str, '%H:%M').time()
+                target_date_for_reminder = None
+                if original_reminder_ts != 0:
+                    original_reminder_dt_obj = dt.fromtimestamp(original_reminder_ts)
+                    target_date_for_reminder = original_reminder_dt_obj.date()
+                else:
+                    target_date_for_reminder = dt.now().date()
+                new_reminder_dt_obj = dt.combine(target_date_for_reminder, parsed_time_obj)
+                new_reminder_ts = int(new_reminder_dt_obj.timestamp())
+                current_system_dt = dt.now()
+                if new_reminder_dt_obj < current_system_dt and (current_system_dt - new_reminder_dt_obj).total_seconds() > 60:
+                     flash("Warning: Reminder time is in the past (considering its date).", "warning")
+            except ValueError:
+                flash("Invalid reminder time format. Reminder remains unchanged from its original value.", "error")
+                new_reminder_ts = original_reminder_ts
+        updated_data = {
+            "url": url, "title": title if title else url,
+            "reminder_timestamp": new_reminder_ts
+            # You might want to update other fields like 'notes' here as well if your form allows it
+        }
+        updated_link_obj = link_core.update_link(link_id, updated_data) # This will now use KV
+        if updated_link_obj:
+            flash(f"Link '{updated_link_obj.get('title', updated_link_obj.get('url'))}' updated successfully!", "success")
+            return redirect(url_for('index'))
+        else:
+            flash("Failed to update link. An internal error occurred during save.", "error")
+            current_form_state_for_link = {
+                'id': link_id, 'url': url, 'title': title,
+                'notes': link_to_edit.get('notes', ''), # Use the original notes if not updating
+                'is_default': link_to_edit.get('is_default', False)
+            }
+            _new_date_val, new_time_val = _ts_to_datetime_strings(new_reminder_ts)
+            return render_template('edit_link.html',
+                                   link=current_form_state_for_link,
+                                   reminder_time_val=new_time_val,
+                                   error_source='save_fail'), 500
+    else: # GET request
+        _date_str_val, time_str_val = _ts_to_datetime_strings(link_to_edit.get('reminder_timestamp'))
+        return render_template('edit_link.html',
+                               link=link_to_edit,
+                               reminder_time_val=time_str_val)
+
+@app.route('/delete/<link_id>', methods=['POST'])
+def delete_link_action(link_id):
+    link_to_delete = link_core.get_link_by_id(link_id) # This will now use KV
+    if not link_to_delete:
+        flash(f"Error: Link with ID {link_id} not found. Cannot delete.", "error")
+        return redirect(url_for('index'))
+    link_display_name = link_to_delete.get('title', '').strip()
+    if not link_display_name:
+        link_display_name = link_to_delete.get('url', f"ID {link_id}")
+    if link_core.delete_link_by_id(link_id): # This will now use KV
+        flash(f"Link '{link_display_name}' deleted successfully.", "success")
+    else:
+        flash(f"Failed to delete link '{link_display_name}'. An internal error may have occurred or the link was already removed.", "error")
+    return redirect(url_for('index'))
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings_page():
+    if request.method == 'POST':
+        try:
+            page_size_str = request.form.get('page_size')
+            page_size = int(page_size_str)
+            if page_size <= 0 or page_size > 100: # Max page size of 100 as an example
+                raise ValueError("Page size out of range.")
+            link_core.CONFIG['page_size'] = page_size
+        except (ValueError, TypeError): # Catch if page_size_str is not a valid int
+            flash("Invalid Page Size. Please enter a number between 1 and 100.", "error")
+            return render_template('settings.html',
+                                   current_settings=link_core.CONFIG,
+                                   all_date_formats=link_core.CONFIG.get('date_formats', {}))
+
+        date_format_choice = request.form.get('date_format_choice')
+        if date_format_choice not in link_core.CONFIG.get('date_formats', {}):
+            flash("Invalid Date Format selected.", "error")
+            # Reload current settings before rendering
+            if not link_core.CONFIG: link_core.load_config()
+            return render_template('settings.html',
+                                   current_settings=link_core.CONFIG,
+                                   all_date_formats=link_core.CONFIG.get('date_formats', {}))
+        link_core.CONFIG['date_format_choice'] = date_format_choice
+
+        default_export_path = request.form.get('default_export_path', '~/' ).strip()
+        link_core.CONFIG['default_export_path'] = default_export_path
+
+        if link_core.save_config(): # This will now save to KV
+            flash("Settings saved successfully!", "success")
+        else:
+            flash("Error saving settings. Please try again.", "error")
+        return redirect(url_for('settings_page'))
+
+    if not link_core.CONFIG:
+        link_core.load_config() # This will now load from KV
+
+    return render_template('settings.html',
+                           current_settings=link_core.CONFIG,
+                           all_date_formats=link_core.CONFIG.get('date_formats', {}))
+
+@app.route('/visit/<link_id>', methods=['GET'])
+def visit_link_action(link_id):
+    link_details = link_core.get_link_by_id(link_id) # This will now use KV
+    if not link_details:
+        flash("Link not found. Cannot record visit.", "error")
+        return redirect(url_for('index'))
+
+    target_url = link_details.get('url')
+    if not target_url:
+        flash("Error: The selected link does not have a valid URL associated with it.", "error")
+        return redirect(url_for('index'))
+
+    if link_core.record_link_visit(link_id): # This will now use KV
+        print(f"Redirecting to: {target_url} for link ID {link_id}")
+        return redirect(target_url)
+    else:
+        flash("Could not record visit for the link due to an internal error. Please try again.", "error")
+        return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    # For local development, Vercel CLI (vercel dev) will handle running this.
+    # The host and port here are more for direct `python app.py` execution.
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)), debug=False)
+
+# link_core.py
+
+import json
+import os
+import uuid
+import time
+from datetime import datetime, time as dt_time # Keep your datetime imports
+
+# --- Vercel KV (Redis) Client Initialization ---
+KV_URL = os.getenv('KV_URL') # You manually set this in Vercel project settings
+kv_client = None
+
+if KV_URL:
+    try:
+        import redis # Ensure redis is imported only if KV_URL exists
+        kv_client = redis.from_url(KV_URL)
+        kv_client.ping()
+        print("Successfully connected to Vercel KV in link_core.py!")
+    except ImportError:
+        print("The 'redis' library is not installed. Please add it to requirements.txt.")
+        kv_client = None
+    except Exception as e:
+        print(f"Error connecting to Vercel KV in link_core.py: {e}")
+        kv_client = None
+else:
+    print("KV_URL environment variable not found. KV store functionality will be disabled. Using local file fallback (not recommended for Vercel).")
+
+# Define keys for storing data in KV
+LINKS_DATA_KEY = "interactive_link_manager:links"
+CONFIG_DATA_KEY = "interactive_link_manager:config"
+
+# Fallback file paths for local development if KV is not available
+# These will NOT work for persistence on Vercel.
+LOCAL_DATA_FILE = "links.json"
+LOCAL_CONFIG_FILE = "config.json"
+
+# --- Configuration Management ---
+CONFIG = {} # Global CONFIG variable
+DEFAULT_CONFIG = {
+    "page_size": 20,
+    "date_format_choice": "1",
+    "date_formats": {
+        "1": "%Y-%m-%d %H:%M:%S",
+        "2": "%d/%m/%Y %H:%M",
+        "3": "%m/%d/%y %I:%M %p"
+    },
+    "default_export_path": "~/"
+}
+
+def load_config():
+    global CONFIG
+    if kv_client:
+        try:
+            config_json = kv_client.get(CONFIG_DATA_KEY)
+            if config_json:
+                loaded_config = json.loads(config_json)
+                # Ensure all default keys are present
+                for key, value in DEFAULT_CONFIG.items():
+                    loaded_config.setdefault(key, value)
+                CONFIG = loaded_config
+                print("Config loaded from Vercel KV.")
+                return
+            else:
+                print("No config found in Vercel KV, using default and saving.")
+                CONFIG = DEFAULT_CONFIG.copy()
+                save_config() # Save default to KV
+                return
+        except Exception as e:
+            print(f"Error loading config from Vercel KV: {e}. Using default and attempting to save.")
+            CONFIG = DEFAULT_CONFIG.copy()
+            save_config() # Attempt to save default to KV
+            return
+    else: # Fallback to local file if KV client is not available (for local dev)
+        print("KV client not available. Attempting to load config from local file (for local dev ONLY).")
+        if not os.path.exists(LOCAL_CONFIG_FILE):
+            CONFIG = DEFAULT_CONFIG.copy()
+            _save_config_local() # Save to local file
+            return
+        try:
+            with open(LOCAL_CONFIG_FILE, 'r') as f:
+                loaded_config = json.load(f)
+            for key, value in DEFAULT_CONFIG.items():
+                loaded_config.setdefault(key, value)
+            CONFIG = loaded_config
+        except Exception as e:
+            print(f"Warning: Error loading local config: {e}. Using default settings.")
+            CONFIG = DEFAULT_CONFIG.copy()
+
+def save_config():
+    global CONFIG
+    if kv_client:
+        try:
+            kv_client.set(CONFIG_DATA_KEY, json.dumps(CONFIG))
+            print("Config saved to Vercel KV.")
+            return True
+        except Exception as e:
+            print(f"Error: Could not save configuration to Vercel KV: {e}")
+            return False
+    else: # Fallback for local dev
+        print("KV client not available. Attempting to save config to local file (for local dev ONLY).")
+        return _save_config_local()
+
+def _save_config_local(): # Helper for local file saving
+    global CONFIG
+    try:
+        with open(LOCAL_CONFIG_FILE, 'w') as f:
+            json.dump(CONFIG, f, indent=4)
+        return True
+    except Exception as e:
+        print(f"Error saving local config: {e}")
+        return False
+
+
+def get_active_date_format_str():
+    global CONFIG
+    if not CONFIG: load_config() # Ensure config is loaded
+    choice = CONFIG.get("date_format_choice", "1")
+    date_formats_dict = CONFIG.get("date_formats", DEFAULT_CONFIG["date_formats"])
+    return date_formats_dict.get(choice, DEFAULT_CONFIG["date_formats"]["1"])
+
+
+# --- Link Data Management (Using Vercel KV) ---
+def _load_links_from_kv():
+    if not kv_client:
+        print("KV client not available in _load_links_from_kv. Falling back to local file (for local dev ONLY).")
+        return _load_links_local() # Fallback for local dev
+    try:
+        links_json = kv_client.get(LINKS_DATA_KEY)
+        if links_json:
+            links_data = json.loads(links_json)
+            # Your existing logic for ensuring default fields in links
+            for link in links_data:
+                link.setdefault('id', str(uuid.uuid4()))
+                link.setdefault('url', '')
+                link.setdefault('title', link.get('url', 'N/A'))
+                link.setdefault('notes', '')
+                link.setdefault('is_default', False)
+                link.setdefault('reminder_timestamp', 0)
+                link.setdefault('last_visited_timestamp', 0)
+                link.setdefault('visit_count', 0)
+                link.setdefault('created_timestamp', int(time.time()))
+            return links_data
+        return [] # No data in KV, return empty list
+    except Exception as e:
+        print(f"Error loading links from Vercel KV: {e}. Returning empty list.")
+        return []
+
+def _save_links_to_kv(links_data_list):
+    if not kv_client:
+        print("KV client not available in _save_links_to_kv. Falling back to local file (for local dev ONLY).")
+        return _save_links_local(links_data_list) # Fallback for local dev
+    try:
+        kv_client.set(LINKS_DATA_KEY, json.dumps(links_data_list))
+        print(f"Saved {len(links_data_list)} links to Vercel KV.")
+        return True
+    except Exception as e:
+        print(f"Error saving links to Vercel KV: {e}")
+        return False
+
+# --- Local file fallbacks (for development when KV_URL is not set) ---
+def _load_links_local():
+    if not os.path.exists(LOCAL_DATA_FILE): return []
+    try:
+        if os.path.getsize(LOCAL_DATA_FILE) == 0: return []
+        with open(LOCAL_DATA_FILE, 'r') as f:
+            links_data = json.load(f)
+        # ... (your existing default field logic from original load_links_data) ...
+        for link in links_data:
+            link.setdefault('id', str(uuid.uuid4())) # etc.
+        return links_data
+    except Exception as e:
+        print(f"Warning: Error loading local links: {e}")
+        return []
+
+def _save_links_local(links_data_list):
+    try:
+        with open(LOCAL_DATA_FILE, 'w') as f:
+            json.dump(links_data_list, f, indent=4)
+        return True
+    except Exception as e:
+        print(f"ERROR saving local links: {e}")
+        return False
+
+# --- Core Link Operations (Now use _load_links_from_kv and _save_links_to_kv) ---
+def get_all_links():
+    return _load_links_from_kv() # Changed
+
+def add_new_link(url, title, notes, is_default, reminder_timestamp):
+    links = _load_links_from_kv() # Changed
+    normalized_url = url.strip()
+    for existing_link in links:
+        if existing_link.get('url', '').strip() == normalized_url:
+            return "duplicate_url"
+    new_link = {
+        "id": str(uuid.uuid4()), "url": normalized_url,
+        "title": title.strip() if title.strip() else normalized_url,
+        "notes": notes.strip(), "is_default": is_default,
+        "reminder_timestamp": reminder_timestamp if reminder_timestamp else 0,
+        "last_visited_timestamp": 0, "visit_count": 0,
+        "created_timestamp": int(time.time())
+    }
+    links.append(new_link)
+    if _save_links_to_kv(links): # Changed
+        return new_link
+    else:
+        return None
+
+def get_link_by_id(link_id):
+    links = _load_links_from_kv() # Changed
+    for link in links:
+        if link.get('id') == link_id:
+            return link
+    return None
+
+def update_link(link_id, updated_data):
+    links = _load_links_from_kv() # Changed
+    link_found = False
+    updated_link_details = None
+    for i, link in enumerate(links):
+        if link.get('id') == link_id:
+            # Your existing update logic for link keys
+            for key, value in updated_data.items():
+                link[key] = value # Ensure you only update valid keys
+            links[i] = link # Update the link in the list
+            updated_link_details = link
+            link_found = True
+            break
+    if link_found and _save_links_to_kv(links): # Changed
+        return updated_link_details
+    elif not link_found:
+        print(f"Error: Link with ID {link_id} not found for update.")
+    return None
+
+def delete_link_by_id(link_id):
+    all_links = _load_links_from_kv() # Changed
+    if all_links is None: return False # Should ideally not happen if _load_links_from_kv returns [] on error
+    original_length = len(all_links)
+    links_to_keep = [link for link in all_links if link.get('id') != link_id]
+    if len(links_to_keep) < original_length:
+        if _save_links_to_kv(links_to_keep): # Changed
+            return True
+        else:
+            return False
+    else:
+        return False # Link not found
+
+def record_link_visit(link_id):
+    links = _load_links_from_kv() # Changed
+    link_to_update = None
+    for current_link in links:
+        if current_link.get('id') == link_id:
+            link_to_update = current_link
+            break
+    if link_to_update:
+        link_to_update.setdefault('visit_count', 0) # Ensure keys exist before incrementing
+        link_to_update.setdefault('last_visited_timestamp', 0)
+        link_to_update['visit_count'] += 1
+        link_to_update['last_visited_timestamp'] = int(time.time())
+        if _save_links_to_kv(links): # Changed
+            return True
+        else:
+            return False
+    else:
+        return False
+
+# --- Your existing helper functions (format_web_timestamp, get_daily_time_status, search, sort) ---
+# These should largely remain the same as they operate on the data after it's loaded.
+# Make sure they use the global CONFIG variable which is now loaded from KV.
+
+def format_web_timestamp(ts):
+    global CONFIG
+    if not CONFIG: load_config() # Ensure config is loaded
+    if not ts or ts == 0: return "N/A"
+    date_format_str = get_active_date_format_str()
+    try:
+        return datetime.fromtimestamp(ts).strftime(date_format_str)
+    except (ValueError, OSError):
+        return "Invalid Date"
+
+def get_daily_time_status(reminder_timestamp):
+    # This function seems fine as is, assuming reminder_timestamp is correct
+    if not reminder_timestamp or reminder_timestamp == 0:
+        return {'display_time': "N/A", 'status': "n_a"}
+    try:
+        reminder_datetime_obj = datetime.fromtimestamp(reminder_timestamp)
+        hour_12 = reminder_datetime_obj.strftime('%I')
+        if hour_12.startswith('0'):
+            hour_12 = hour_12[1:]
+        display_time = f"{hour_12}:{reminder_datetime_obj.strftime('%M %p')}"
+        now = datetime.now()
+        reminder_time_of_day = reminder_datetime_obj.time()
+        # Check if reminder_datetime_obj's date is today, or if it's just a time
+        # For simplicity, assuming reminder_timestamp is an absolute point in time
+        if reminder_datetime_obj < now:
+            status = "elapsed" # Changed from "elapsed_today" for clarity if ts is absolute
+        else:
+            status = "upcoming" # Changed from "upcoming_today"
+        return {'display_time': display_time, 'status': status}
+    except (ValueError, OSError) as e:
+        print(f"Error processing reminder timestamp {reminder_timestamp}: {e}")
+        return {'display_time': "Invalid Date", 'status': "n_a"}
+
+# --- Search and Sort Logic (no changes needed here for KV, they work on the loaded list) ---
+def core_search_links(all_links, search_term, search_type="basic", criteria=None):
+    # ... your existing code ...
+    filtered = []
+    if search_type == "basic":
+        st_lower = search_term.lower()
+        for link in all_links:
+            if st_lower in link.get('title', '').lower() or \
+               st_lower in link.get('url', '').lower() or \
+               st_lower in link.get('notes', '').lower():
+                filtered.append(link)
+    return filtered
+
+def core_sort_links(links_to_sort, sort_by, sort_order):
+    # ... your existing complex sorting code ...
+    # This operates on the list in memory, so no direct KV changes needed.
+    sorted_list = list(links_to_sort)
+    if sort_by:
+        reverse = (sort_order == 'desc')
+        if sort_by == 'title':
+            sorted_list.sort(key=lambda x: x.get('title','').lower(), reverse=reverse)
+        elif sort_by == 'created':
+            sorted_list.sort(key=lambda x: x.get('created_timestamp',0), reverse=reverse)
+        # ... other sort conditions from your original code ...
+        elif sort_by == 'reminder_time':
+             sorted_list.sort(key=lambda x: x.get('reminder_timestamp', float('-inf') if reverse else float('inf')), reverse=reverse)
+
+    return sorted_list
+
+
+# Load config when this module is imported
+# This will attempt to load from KV first, then local file (for dev), then defaults.
+load_config()
+
+import json
+import os
+import uuid # For unique link IDs later
+import time
+from datetime import datetime # For formatting timestamp and parsing reminder input
+# import shlex # Kept for potential future use
+
+# Define the name of our data files
+DATA_FILE = "links.json"
+CONFIG_FILE = "config.json"
+
+# Global variable to hold loaded configuration
+CONFIG = {}
+
+# --- Configuration Functions ---
+def load_config():
+    """Loads configuration from config.json, or returns defaults."""
+    global CONFIG
+    defaults = {
+        "page_size": 5,
+        "date_format_choice": "1", # Corresponds to '%Y-%m-%d %H:%M:%S'
+        "date_formats": {
+            "1": "%Y-%m-%d %H:%M:%S", # Default
+            "2": "%d/%m/%Y %H:%M",   # Day/Month/Year Hour:Minute
+            "3": "%m/%d/%y %I:%M %p"    # Month/Day/YearShort Hour(12):Minute AM/PM
+        },
+        "default_export_path": "~/" # Default to home directory
+    }
+    if not os.path.exists(CONFIG_FILE):
+        CONFIG = defaults
+        save_config() # Save defaults if no config file exists
+        return
+
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            loaded_config = json.load(f)
+            # Ensure all keys from defaults are present
+            for key, value in defaults.items():
+                loaded_config.setdefault(key, value)
+            # Special handling for date_formats if user manually edited config
+            if not isinstance(loaded_config.get("date_formats"), dict) or \
+               not all(k in loaded_config["date_formats"] for k in ["1","2","3"]):
+                loaded_config["date_formats"] = defaults["date_formats"]
+
+            CONFIG = loaded_config
+    except (IOError, json.JSONDecodeError) as e:
+        print(f"Error loading config: {e}. Using default settings.")
+        CONFIG = defaults
+    except Exception as e:
+        print(f"Unexpected error loading config: {e}. Using default settings.")
+        CONFIG = defaults
+
+def save_config():
+    """Saves the current CONFIG to config.json."""
+    global CONFIG
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(CONFIG, f, indent=4)
+        # print("Configuration saved.") # Optional feedback
+        return True
+    except IOError as e:
+        print(f"Error saving configuration: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error saving configuration: {e}")
+        return False
+
+def get_active_date_format_str():
+    """Gets the strftime format string based on current config."""
+    global CONFIG
+    choice = CONFIG.get("date_format_choice", "1")
+    return CONFIG.get("date_formats", {}).get(choice, "%Y-%m-%d %H:%M:%S") # Default to ISO like if error
+
+# --- Modified existing functions to use CONFIG ---
+def format_timestamp(ts):
+    """Formats a Unix timestamp into a human-readable string using configured format."""
+    if not ts or ts == 0: return "N/A"
+    date_format_str = get_active_date_format_str()
+    try:
+        return datetime.fromtimestamp(ts).strftime(date_format_str)
+    except ValueError: return "Invalid Date"
+    except OSError: return "Date out of range"
+
+# load_links and save_links for DATA_FILE remain largely the same,
+# but export/import will use config for default export path.
+
+# --- display_links needs to use CONFIG['page_size'] ---
+def display_links(links_to_show, sort_by=None, sort_order='asc', title_prefix="--- Links ---", 
+                  paginate=False): # Removed page_size from args, will use CONFIG
+    global CONFIG
+    page_size = CONFIG.get("page_size", 5) # Use configured page size
+
+    # ... (rest of display_links logic from previous step, ensuring it uses the local page_size) ...
+    if not links_to_show:
+        print(f"\n{title_prefix.replace('---', '--- No')} to display ---")
+        return False
+    links_to_sort = list(links_to_show)
+    if sort_by:
+        reverse_order = (sort_order == 'desc')
+        if sort_by == 'title': links_to_sort.sort(key=lambda x: x.get('title', '').lower(), reverse=reverse_order)
+        elif sort_by == 'created': links_to_sort.sort(key=lambda x: x.get('created_timestamp', 0), reverse=reverse_order)
+        # ... other sort keys ...
+        elif sort_by == 'last_visited': links_to_sort.sort(key=lambda x: x.get('last_visited_timestamp', 0), reverse=reverse_order)
+        elif sort_by == 'visit_count': links_to_sort.sort(key=lambda x: x.get('visit_count', 0), reverse=reverse_order)
+        elif sort_by == 'reminder_time': links_to_sort.sort(key=lambda x: x.get('reminder_timestamp', 0), reverse=reverse_order)
+
+    total_items = len(links_to_sort)
+    if not paginate or total_items <= page_size:
+        header_note = f"(Showing all {total_items} items)" if paginate else "" # only show if paginate was true
+        print(f"\n{title_prefix} {header_note}")
+        for index, link in enumerate(links_to_sort):
+            default_marker = "[Default]" if link.get('is_default') else ""
+            print(f"{index + 1}. Title: {link.get('title', 'N/A')} {default_marker}")
+            print(f"   URL: {link.get('url', 'N/A')}")
+            if link.get('notes'): print(f"   Notes: {link.get('notes')}")
+            print(f"   Visits: {link.get('visit_count', 0)}")
+            print(f"   Last Visited: {format_timestamp(link.get('last_visited_timestamp', 0))}")
+            print(f"   Added: {format_timestamp(link.get('created_timestamp', 0))}")
+            print(f"   Reminder: {format_timestamp(link.get('reminder_timestamp', 0))}")
+            print(f"   ID: {link.get('id', 'N/A')}")
+            print("-" * 10)
+        print("-------------")
+        return True
+
+    total_pages = (total_items + page_size - 1) // page_size
+    current_page = 1
+    while True:
+        start_index = (current_page - 1) * page_size
+        end_index = start_index + page_size
+        page_items = links_to_sort[start_index:end_index]
+        print(f"\n{title_prefix} (Page {current_page}/{total_pages}, Items {start_index + 1}-{min(end_index, total_items)} of {total_items})")
+        for index, link in enumerate(page_items):
+            default_marker = "[Default]" if link.get('is_default') else ""
+            print(f"{index + 1}. Title: {link.get('title', 'N/A')} {default_marker}")
+            # ... print other link details ...
+            print(f"   URL: {link.get('url', 'N/A')}")
+            if link.get('notes'): print(f"   Notes: {link.get('notes')}")
+            print(f"   Visits: {link.get('visit_count', 0)}")
+            print(f"   Last Visited: {format_timestamp(link.get('last_visited_timestamp', 0))}")
+            print(f"   Added: {format_timestamp(link.get('created_timestamp', 0))}")
+            print(f"   Reminder: {format_timestamp(link.get('reminder_timestamp', 0))}")
+            print(f"   ID: {link.get('id', 'N/A')}")
+            print("-" * 10)
+        print("-------------")
+        if total_pages <= 1: break
+        prompt_str = "Options: Next (n), Prev (p), Go (gX), Quit view (q): "
+        page_choice = input(prompt_str).strip().lower()
+        if page_choice == 'n':
+            if current_page < total_pages: current_page += 1
+            else: print("Already on the last page.")
+        elif page_choice == 'p':
+            if current_page > 1: current_page -= 1
+            else: print("Already on the first page.")
+        elif page_choice.startswith('g'):
+            try:
+                target_page_str = page_choice[1:]
+                if not target_page_str: raise ValueError("No page number.")
+                target_page = int(target_page_str)
+                if 1 <= target_page <= total_pages: current_page = target_page
+                else: print(f"Page number out of range (1-{total_pages}).")
+            except ValueError: print("Invalid 'go to page' format (e.g., g3).")
+        elif page_choice == 'q': break
+        else: print("Invalid option.")
+    return True
+
+# view_all_links_interactive, search_links_interactive, view_reminders_interactive
+# will call display_links with paginate=True, and display_links will pick up page_size from CONFIG.
+
+def view_all_links_interactive():
+    all_links = load_links()
+    title_prefix="--- All Links ---"
+    if not all_links: display_links(all_links, title_prefix=title_prefix); return
+    sort_by, sort_order = get_sort_preferences()
+    display_links(all_links, sort_by=sort_by, sort_order=sort_order, 
+                  title_prefix=title_prefix, paginate=True) # paginate=True
+
+def basic_search_links_interactive():
+    # ... (search logic) ...
+    # When displaying:
+    # display_links(filtered_links, ..., paginate=True)
+    print("\n--- Basic Search Links ---")
+    search_term = input("Enter search term: ").strip().lower()
+    if not search_term: print("Search term empty."); return
+    all_links = load_links(); filtered_links = []
+    if not all_links: print("No links to search."); return
+    for link in all_links:
+        if search_term in link.get('title', '').lower() or \
+           search_term in link.get('url', '').lower() or \
+           search_term in link.get('notes', '').lower():
+            filtered_links.append(link)
+    if not filtered_links: print(f"No links found for '{search_term}'.")
+    else:
+        print(f"\nFound {len(filtered_links)} link(s) for '{search_term}':")
+        sort_by, sort_order = get_sort_preferences()
+        display_links(filtered_links, sort_by=sort_by, sort_order=sort_order, 
+                      title_prefix=f"--- Search Results for '{search_term}' ---", paginate=True)
+    print("--------------------")
+
+
+def advanced_search_links_interactive():
+    # ... (search logic) ...
+    # When displaying:
+    # display_links(filtered_links, ..., paginate=True)
+    print("\n--- Advanced Search Links ---")
+    print("Syntax: field:value (e.g., title:work notes:important is:default)")
+    query_str = input("Enter advanced search query: ").strip().lower()
+    if not query_str: print("Query empty."); return
+    all_links = load_links(); filtered_links = []
+    if not all_links: print("No links to search."); return
+    criteria_parts = query_str.split(); parsed_criteria = []; valid_query = True
+    for part in criteria_parts:
+        if ':' not in part: print(f"Invalid: '{part}'. Expected 'field:value'."); valid_query = False; break
+        field, value = part.split(':', 1)
+        if field not in ['title', 'url', 'notes', 'is']: print(f"Invalid field: '{field}'."); valid_query = False; break
+        if field == 'is' and value not in ['default', 'not-default']: print(f"Invalid value for 'is': '{value}'."); valid_query = False; break
+        parsed_criteria.append({'field': field, 'value': value})
+    if not valid_query or not parsed_criteria: return
+    for link in all_links: # Corrected variable name
+        match_all = True
+        for crit in parsed_criteria:
+            f, v = crit['field'], crit['value']
+            if f == 'title' and v not in link.get('title','').lower(): match_all=False; break
+            elif f == 'url' and v not in link.get('url','').lower(): match_all=False; break
+            elif f == 'notes' and v not in link.get('notes','').lower(): match_all=False; break
+            elif f == 'is':
+                if v == 'default' and not link.get('is_default'): match_all=False; break
+                if v == 'not-default' and link.get('is_default'): match_all=False; break
+        if match_all: filtered_links.append(link) # Corrected variable name
+    if not filtered_links: print(f"No links found for '{query_str}'.")
+    else:
+        print(f"\nFound {len(filtered_links)} link(s) for '{query_str}':")
+        sort_by, sort_order = get_sort_preferences()
+        display_links(filtered_links, sort_by=sort_by, sort_order=sort_order, 
+                      title_prefix=f"--- Advanced Search Results ---", paginate=True)
+    print("---------------------------")
+
+def view_reminders_interactive():
+    # ... (reminder logic) ...
+    # When displaying:
+    # display_links(due_overdue_reminders, ..., paginate=True)
+    # display_links(upcoming_reminders, ..., paginate=True)
+    print("\n--- View Reminders ---")
+    all_links = load_links(); now_ts = int(time.time()); due = []; upcoming = []
+    if not all_links: print("No links for reminders."); return
+    for link in all_links:
+        rem_ts = link.get('reminder_timestamp', 0)
+        if rem_ts > 0:
+            if rem_ts <= now_ts: due.append(link)
+            else: upcoming.append(link)
+    rem_found = False
+    if due:
+        rem_found = True
+        display_links(due, sort_by='reminder_time', sort_order='asc', 
+                      title_prefix="--- Due/Overdue Reminders ---", paginate=True)
+    else: print("\nNo due or overdue reminders.")
+    if upcoming:
+        rem_found = True
+        display_links(upcoming, sort_by='reminder_time', sort_order='asc', 
+                      title_prefix="--- Upcoming Reminders ---", paginate=True)
+    else: print("\nNo upcoming reminders.")
+    if not rem_found : print("\nNo reminders are currently set or active.")
+    print("----------------------")
+
+
+def export_links_interactive():
+    global CONFIG
+    print("\n--- Export Links ---")
+    current_links = load_links()
+    if not current_links and input("No links. Create empty export? (y/n): ").lower() != 'y': return
+
+    # Use configured default path, then timestamped filename
+    default_export_dir = os.path.expanduser(CONFIG.get("default_export_path", "~/"))
+    if not default_export_dir.endswith('/'): default_export_dir += '/'
+    default_filename = f"links_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    suggested_path = os.path.join(default_export_dir, default_filename) # Use os.path.join
+
+    print(f"\nTip: To save to shared storage, ensure 'termux-setup-storage' has been run.")
+    print(f"Default export directory is: {default_export_dir}")
+    export_filepath_str = input(f"Enter filename or full path for export (default: {suggested_path}): ").strip()
+    
+    export_filepath = os.path.expanduser(export_filepath_str or suggested_path)
+
+    try:
+        export_dir_actual = os.path.dirname(export_filepath)
+        if export_dir_actual and not os.path.exists(export_dir_actual):
+            os.makedirs(export_dir_actual); print(f"Created directory: {export_dir_actual}")
+    except OSError as e: print(f"Error creating directory: {e}"); return
+    except Exception as e: print(f"Invalid path: {e}"); return
+
+    if save_links(current_links, export_filepath): print(f"Exported {len(current_links)} links to: {export_filepath}")
+    else: print(f"Failed to export to: {export_filepath}")
+    print("--------------------")
+
+# --- New Settings Function ---
+def configure_settings_interactive():
+    """Allows user to configure application settings."""
+    global CONFIG
+    print("\n--- Configure Settings ---")
+    
+    while True:
+        print("\nCurrent Settings:")
+        print(f"1. Page Size for lists: {CONFIG.get('page_size', 5)}")
+        
+        current_format_choice = CONFIG.get('date_format_choice', "1")
+        current_format_str = CONFIG.get('date_formats', {}).get(current_format_choice, "N/A")
+        print(f"2. Date Display Format: Choice {current_format_choice} ({current_format_str})")
+        
+        print(f"3. Default Export Path: {CONFIG.get('default_export_path', '~/')}")
+        print("0. Back to Main Menu")
+
+        choice = input("Enter setting to change (0-3): ").strip()
+
+        if choice == '0':
+            break
+        elif choice == '1':
+            try:
+                new_size_str = input(f"Enter new page size (current: {CONFIG.get('page_size')}): ").strip()
+                if new_size_str: # Only update if user entered something
+                    new_size = int(new_size_str)
+                    if new_size > 0:
+                        CONFIG['page_size'] = new_size
+                        print(f"Page size set to {new_size}.")
+                    else:
+                        print("Page size must be a positive number.")
+            except ValueError:
+                print("Invalid input. Page size must be a number.")
+        elif choice == '2':
+            print("Available Date Formats:")
+            for k, v_format in CONFIG.get("date_formats", {}).items():
+                # Show example using current time
+                example_time = datetime.now().strftime(v_format)
+                print(f"  {k}: {v_format} (e.g., {example_time})")
+            
+            new_format_choice = input("Enter choice for date format: ").strip()
+            if new_format_choice in CONFIG.get("date_formats", {}):
+                CONFIG['date_format_choice'] = new_format_choice
+                print(f"Date format set to choice {new_format_choice}.")
+            else:
+                print("Invalid choice for date format.")
+        elif choice == '3':
+            new_path = input(f"Enter new default export path (current: {CONFIG.get('default_export_path')}): ").strip()
+            if new_path: # Only update if user entered something
+                # Basic validation: should probably check if it's a writable dir, but keep it simple for now
+                CONFIG['default_export_path'] = new_path
+                print(f"Default export path set to {new_path}.")
+        else:
+            print("Invalid choice.")
+
+        save_config() # Save after each change or at the end of the loop
+    print("------------------------")
+
+
+# --- Main CLI ---
+def main_cli():
+    global CONFIG
+    load_config() # Load configuration at the start
+
+    while True:
+        print("\nInteractive Link Manager")
+        # ... (menu options 1-8 remain the same) ...
+        print("1. Add Link")
+        print("2. View All Links")
+        print("3. Delete Link")
+        print("4. Edit Link")
+        print("5. Visit Link")
+        print("6. Basic Search Links")
+        print("7. Advanced Search Links")
+        print("8. View Reminders")
+        print("9. Export Links")
+        print("10. Import Links")
+        print("11. Settings")         # New
+        print("12. Exit")            # Shifted
+        choice = input("Enter your choice (1-12): ").strip()
+
+        if choice == '1': add_link_interactive()
+        elif choice == '2': view_all_links_interactive()
+        # ... (elif for 3-8) ...
+        elif choice == '3': delete_link_interactive()
+        elif choice == '4': edit_link_interactive()
+        elif choice == '5': visit_link_interactive()
+        elif choice == '6': basic_search_links_interactive()
+        elif choice == '7': advanced_search_links_interactive()
+        elif choice == '8': view_reminders_interactive()
+        elif choice == '9': export_links_interactive()
+        elif choice == '10': import_links_interactive()
+        elif choice == '11': configure_settings_interactive() # New
+        elif choice == '12':
+            print("Exiting Link Manager. Goodbye!")
+            break
+        else:
+            print("Invalid choice. Please enter a number between 1 and 12.")
+
+# Ensure all other functions (prompt_for_reminder_datetime, add_link_interactive, get_sort_preferences,
+# view_all_links_interactive, delete_link_interactive, edit_link_interactive, visit_link_interactive,
+# basic_search_links_interactive, advanced_search_links_interactive, view_reminders_interactive,
+# export_links_interactive, import_links_interactive) are correctly defined in your full script.
+# I've included stubs or full versions for modified ones.
+
+if __name__ == "__main__":
+    main_cli()
+
+
+links.json
+
+[
+    {
+        "id": "56cf83dd-edde-4ae6-ad66-484ec73aaa2c",
+        "url": "https://modo.us",
+        "title": "Modo",
+        "notes": "Reset",
+        "is_default": false,
+        "reminder_timestamp": 1747637700,
+        "last_visited_timestamp": 1747595829,
+        "visit_count": 1,
+        "created_timestamp": 1747594003
+    },
+    {
+        "id": "7e4fb457-f9e2-45c7-a515-c28ee652a54d",
+        "url": "https://fortune.com",
+        "title": "Fortune",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 0,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747594848
+    },
+    {
+        "id": "a461e7a0-c3d1-4bd5-b5c1-e3914da9a9fb",
+        "url": "https://goldtreasurecasino.com/lobby",
+        "title": "Golden Treasure",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747614360,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747603590
+    },
+    {
+        "id": "14603952-cffc-4bb1-8ae1-a799a0591df4",
+        "url": "https://spree.com/slots",
+        "title": "Spree",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747627200,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747603769
+    },
+    {
+        "id": "f4484aae-9ee0-4898-93a1-fc07ac844cd5",
+        "url": "https://stake.us",
+        "title": "https://stake.us",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747607580,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747604905
+    },
+    {
+        "id": "d0a1d2fa-e8de-4654-a4c7-9861e417d496",
+        "url": "https://nolimitcoins.com",
+        "title": "https://nolimitcoins.com",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747563300,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747606601
+    },
+    {
+        "id": "b5ed83cd-6e8a-497c-9413-76c91b3813af",
+        "url": "https://www.goldenheartsgames.com/lobby",
+        "title": "Goldenhearts",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747626600,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747607108
+    },
+    {
+        "id": "39f42b35-c8b9-4fd1-bc13-2dd7e815c100",
+        "url": "https://myprize.us",
+        "title": "My Prize",
+        "notes": "",
+        "is_default": false,
+        "reminder_timestamp": 1747612800,
+        "last_visited_timestamp": 0,
+        "visit_count": 0,
+        "created_timestamp": 1747607499
+    }
+]
+
+templates/add_link.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add New Link - Interactive Link Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+    <header class="site-header">
+        <div class="header-inner-container">
+            <h1><a href="{{ url_for('index') }}" class="header-title-link"><i class="fas fa-star"></i> Bonus Tracker</a></h1>
+            <button class="hamburger-menu" aria-label="Toggle navigation" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+            <nav class="main-nav" id="mainNav">
+                <a href="{{ url_for('index') }}"><i class="fas fa-list"></i> All Links</a>
+                <a href="{{ url_for('add_link_form') }}"><i class="fas fa-plus-circle"></i> Add New Link</a>
+                <a href="{{ url_for('settings_page') }}"><i class="fas fa-cog"></i> Settings</a>
+            </nav>
+        </div>
+    </header>
+
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages-wrapper">
+          <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="container">
+        <h2>Add New Link</h2>
+        <form method="POST" action="{{ url_for('add_link_action') }}">
+            <div class="form-group">
+                <label for="url">URL:</label>
+                <input type="url" id="url" name="url" value="{{ url | default('', true) }}" required placeholder="https://">
+            </div>
+            <div class="form-group">
+                <label for="title">Title (optional):</label>
+                <input type="text" id="title" name="title" value="{{ title | default('', true) }}" placeholder="e.g., My Favorite News Site">
+                <small>If left blank, title will default to the URL.</small>
+            </div>
+            <div class="form-group">
+                <label for="notes">Notes (optional):</label>
+                <textarea id="notes" name="notes" placeholder="e.g., Check this site daily for updates.">{{ notes | default('', true) }}</textarea>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="is_default" name="is_default" value="yes" {% if is_default_val == 'yes' %}checked{% endif %}>
+                <label for="is_default" style="display: inline;">Set as Default Link</label>
+            </div>
+
+            <div class="form-group">
+                <label for="reminder_time">Reminder Time (optional, for today):</label>
+                <input type="time" id="reminder_time" name="reminder_time" value="{{ reminder_time | default('', true) }}">
+                <small>Sets a reminder for the specified time on today's date.</small>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="button-primary"><i class="fas fa-plus"></i> Add Link</button>
+                <a href="{{ url_for('index') }}" class="button button-secondary cancel-link">Cancel</a>
+            </div>
+        </form>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; {{ "now"|datetime("%Y") }} Interactive Link Manager. All rights reserved.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlInput = document.getElementById('url');
+            const titleInput = document.getElementById('title');
+            
+            // Sticky URL prefix logic
+            if (urlInput) {
+                const defaultPrefix = 'https://';
+                const altPrefix = 'http://';
+
+                const setCursorToEnd = (inputEl) => {
+                    const len = inputEl.value.length;
+                    inputEl.setSelectionRange(len, len);
+                };
+
+                urlInput.addEventListener('focus', function() {
+                    if (this.value.trim() === '') {
+                        this.value = defaultPrefix;
+                        // Ensure cursor is at the end after setting prefix
+                        setTimeout(() => setCursorToEnd(this), 0);
+                    }
+                });
+
+                urlInput.addEventListener('keydown', function(e) {
+                    const val = this.value;
+                    const selectionStart = this.selectionStart;
+                    const selectionEnd = this.selectionEnd;
+
+                    // Prevent deleting the prefix if cursor is within it and selection doesn't extend beyond it
+                    if (e.key === 'Backspace') {
+                        if ((val.startsWith(defaultPrefix) && selectionStart <= defaultPrefix.length && selectionStart === selectionEnd) ||
+                            (val.startsWith(altPrefix) && selectionStart <= altPrefix.length && selectionStart === selectionEnd)) {
+                            // If only the prefix is present, or cursor is at the start of prefix part
+                            if (val === defaultPrefix || val === altPrefix || selectionStart < (val.startsWith(defaultPrefix) ? defaultPrefix.length : altPrefix.length) ) {
+                                e.preventDefault();
+                            }
+                        }
+                    } else if (e.key === 'Delete') {
+                        if ((val.startsWith(defaultPrefix) && selectionStart < defaultPrefix.length && selectionEnd <= defaultPrefix.length) ||
+                            (val.startsWith(altPrefix) && selectionStart < altPrefix.length && selectionEnd <= altPrefix.length)) {
+                             e.preventDefault();
+                        }
+                    }
+                });
+
+                urlInput.addEventListener('input', function() {
+                    // If prefix somehow gets mangled or removed, and field isn't being cleared
+                    if (this.value.trim() !== '' && !this.value.startsWith('http://') && !this.value.startsWith('https://')) {
+                        // User might have pasted something without a protocol, or typed over. Prepend default.
+                        this.value = defaultPrefix + this.value.trim();
+                         setTimeout(() => setCursorToEnd(this), 0); // Move cursor to end after auto-correcting
+                    } else if (this.value === 'http:/' || this.value === 'https:/') {
+                        // Allow typing for the second slash
+                    } else if (this.value.length > 0 && this.value.length < defaultPrefix.length) {
+                        // If user is trying to delete into prefix and somehow bypasses keydown (e.g. cut)
+                        if (defaultPrefix.startsWith(this.value) || altPrefix.startsWith(this.value)) {
+                            // Value is a partial prefix, let keydown handle it or restore on blur
+                        } else if (document.activeElement === this) { // If still focused
+                            this.value = defaultPrefix; // Restore default
+                            setTimeout(() => setCursorToEnd(this), 0);
+                        }
+                    }
+                });
+
+                urlInput.addEventListener('blur', function() {
+                    let currentValue = this.value.trim();
+                    if (currentValue === '' || currentValue === defaultPrefix || currentValue === altPrefix) {
+                        // If field is empty or only contains a prefix, clear it to show placeholder
+                        // (unless user wants prefix to always stay on blur, then comment next line)
+                        // this.value = ''; // Keeping it for now as per "doesn't disappear"
+                    } else if (!currentValue.startsWith('http://') && !currentValue.startsWith('https://')) {
+                        this.value = defaultPrefix + currentValue;
+                    }
+                });
+            }
+
+            // Title mirroring JS
+            if (urlInput && titleInput) {
+                let titleManuallyEdited = (titleInput.value.trim() !== '' && (urlInput.value.trim() === '' || titleInput.value.trim() !== urlInput.value.trim()));
+
+                titleInput.addEventListener('input', function() {
+                    if (titleInput.value.trim() === '' || titleInput.value.trim() === urlInput.value.trim()) {
+                        titleManuallyEdited = false;
+                    } else {
+                        titleManuallyEdited = true;
+                    }
+                });
+
+                urlInput.addEventListener('input', function() { // Also trigger on 'input' for immediate mirroring
+                    if (!titleManuallyEdited) {
+                        titleInput.value = urlInput.value;
+                    }
+                });
+
+                if (!titleManuallyEdited && titleInput.value.trim() === '' && urlInput.value.trim() !== '') {
+                    titleInput.value = urlInput.value;
+                }
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
+</body>
+</html>
+
+templates/edit_link.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Link - Interactive Link Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+        <header class="site-header">
+        <div class="header-inner-container">
+            <h1><a href="{{ url_for('index') }}" class="header-title-link"><i class="fas fa-star"></i> Bonus Tracker</a></h1>
+            <button class="hamburger-menu" aria-label="Toggle navigation" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+            <nav class="main-nav" id="mainNav">
+                <a href="{{ url_for('index') }}"><i class="fas fa-list"></i> All Links</a>
+                <a href="{{ url_for('add_link_form') }}"><i class="fas fa-plus-circle"></i> Add New Link</a>
+                <a href="{{ url_for('settings_page') }}"><i class="fas fa-cog"></i> Settings</a>
+            </nav>
+        </div>
+    </header>
+
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages-wrapper">
+          <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="container">
+        <h2>Edit Link</h2>
+        
+        {# Main Edit Form Starts Here #}
+        <form method="POST" action="{{ url_for('edit_link_form', link_id=link.id) }}" id="editForm">
+            <div class="form-group">
+                <label for="url">URL:</label>
+                <input type="url" id="url" name="url" value="{{ link.url | default('https://', true) }}" required placeholder="https://">
+            </div>
+            <div class="form-group">
+                <label for="title">Title (optional):</label>
+                <input type="text" id="title" name="title" value="{{ link.title | default('', true) }}">
+                <small>If left blank, title will default to the URL.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="reminder_time">Reminder Time (optional, clear to remove reminder):</label>
+                <input type="time" id="reminder_time" name="reminder_time" value="{{ reminder_time_val | default('', true) }}">
+                <small>Sets or updates the time for the reminder. The date will be preserved if already set, or defaults to today if setting a new reminder time.</small>
+            </div>
+            
+            {# Actions for the Edit Form #}
+            <div class="form-actions edit-page-actions">
+                <button type="submit" class="button-primary"><i class="fas fa-save"></i> Save Changes</button>
+                <a href="{{ url_for('index') }}" class="button button-secondary cancel-link">Cancel</a>
+                {# The Delete button will now be part of a separate form below, but we can style it to appear here #}
+            </div>
+        </form> 
+        {# Main Edit Form Ends Here #}
+
+        {# Separate Delete Form - Placed after the main form but can be styled to appear with other actions #}
+        {# You might need to adjust CSS for .edit-page-actions if you want all buttons visually grouped #}
+        {# One way is to have a common parent for the "Save/Cancel" and the "Delete Form" #}
+        <div class="form-actions edit-page-actions separate-delete-action"> 
+            {# This div is just for visual grouping if needed, the form below is independent #}
+            <form action="{{ url_for('delete_link_action', link_id=link.id) }}" method="POST" class="delete-link-form-edit-page" 
+                  onsubmit="return confirm('Are you sure you want to permanently delete this link: \'{{ link.title|escape|replace("'", "\\'") }}\'? This action cannot be undone.');">
+                <button type="submit" class="button-danger"><i class="fas fa-trash-alt"></i> Delete This Link</button>
+            </form>
+        </div>
+
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; {{ "now"|datetime("%Y") }} Interactive Link Manager. All rights reserved.</p>
+    </footer>
+
+    <script>
+        // ... (Your existing JavaScript for sticky URL and title mirroring) ...
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlInput = document.getElementById('url');
+            const titleInput = document.getElementById('title');
+            
+            // Sticky URL prefix logic
+            if (urlInput) {
+                const defaultPrefix = 'https://';
+                const altPrefix = 'http://';
+
+                const setCursorToEnd = (inputEl) => {
+                    const len = inputEl.value.length;
+                    inputEl.setSelectionRange(len, len);
+                };
+                
+                if (urlInput.value.trim() === '' || urlInput.value.trim() === 'http:' || urlInput.value.trim() === 'https:') {
+                    urlInput.value = defaultPrefix;
+                }
+
+                urlInput.addEventListener('focus', function() {
+                    if (this.value.trim() === '') {
+                        this.value = defaultPrefix;
+                        setTimeout(() => setCursorToEnd(this), 0);
+                    }
+                });
+
+                urlInput.addEventListener('keydown', function(e) {
+                    const val = this.value;
+                    const selectionStart = this.selectionStart;
+                    const selectionEnd = this.selectionEnd;
+
+                    if (e.key === 'Backspace') {
+                        if ((val.startsWith(defaultPrefix) && selectionStart <= defaultPrefix.length && selectionStart === selectionEnd) ||
+                            (val.startsWith(altPrefix) && selectionStart <= altPrefix.length && selectionStart === selectionEnd)) {
+                            if (val === defaultPrefix || val === altPrefix || selectionStart < (val.startsWith(defaultPrefix) ? defaultPrefix.length : altPrefix.length) ) {
+                                e.preventDefault();
+                            }
+                        }
+                    } else if (e.key === 'Delete') {
+                         if ((val.startsWith(defaultPrefix) && selectionStart < defaultPrefix.length && selectionEnd <= defaultPrefix.length) ||
+                            (val.startsWith(altPrefix) && selectionStart < altPrefix.length && selectionEnd <= altPrefix.length)) {
+                             e.preventDefault();
+                        }
+                    }
+                });
+
+                urlInput.addEventListener('input', function() {
+                    if (this.value.trim() !== '' && !this.value.startsWith('http://') && !this.value.startsWith('https://')) {
+                        this.value = defaultPrefix + this.value.trim();
+                        setTimeout(() => setCursorToEnd(this), 0);
+                    } else if (this.value === 'http:/' || this.value === 'https:/') {
+                        // Allow typing
+                    } else if (this.value.length > 0 && this.value.length < defaultPrefix.length) {
+                         if (defaultPrefix.startsWith(this.value) || altPrefix.startsWith(this.value)) {
+                            // Partial prefix
+                        } else if (document.activeElement === this) {
+                            this.value = defaultPrefix;
+                            setTimeout(() => setCursorToEnd(this), 0);
+                        }
+                    }
+                });
+                
+                urlInput.addEventListener('blur', function() {
+                    let currentValue = this.value.trim();
+                    if (currentValue === '' && urlInput.placeholder === defaultPrefix ) {
+                        // Placeholder will show
+                    } else if (currentValue === defaultPrefix || currentValue === altPrefix ) {
+                        // Leave it
+                    } else if (currentValue !== '' && !currentValue.startsWith('http://') && !currentValue.startsWith('https://')) {
+                        this.value = defaultPrefix + currentValue;
+                    }
+                });
+            }
+
+            // Title mirroring JS
+            if (urlInput && titleInput) {
+                const initialTitle = titleInput.value.trim();
+                const initialUrl = urlInput.value.trim();
+                let titleWasEffectivelyEmptyOrMirror = (initialTitle === '' || initialTitle === initialUrl);
+                let userManuallySetDifferentTitle = !titleWasEffectivelyEmptyOrMirror;
+
+                titleInput.addEventListener('input', function() {
+                    if (titleInput.value.trim() === urlInput.value.trim() || titleInput.value.trim() === '') {
+                        userManuallySetDifferentTitle = false; 
+                    } else {
+                        userManuallySetDifferentTitle = true; 
+                    }
+                });
+
+                urlInput.addEventListener('input', function() {
+                    if (!userManuallySetDifferentTitle) {
+                        titleInput.value = urlInput.value;
+                    }
+                });
+
+                if (titleWasEffectivelyEmptyOrMirror && urlInput.value.trim() !== '' ) {
+                     if (titleInput.value.trim() !== urlInput.value.trim()){
+                          titleInput.value = urlInput.value;
+                     }
+                }
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
+
+</body>
+</html>
+
+templates/index.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Link Manager - Home</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+        <header class="site-header">
+        <div class="header-inner-container">
+            <h1><a href="{{ url_for('index') }}" class="header-title-link"><i class="fas fa-star"></i> Bonus Tracker</a></h1>
+            <button class="hamburger-menu" aria-label="Toggle navigation" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+            <nav class="main-nav" id="mainNav">
+                <a href="{{ url_for('index') }}"><i class="fas fa-list"></i> All Links</a>
+                <a href="{{ url_for('add_link_form') }}"><i class="fas fa-plus-circle"></i> Add New Link</a>
+                <a href="{{ url_for('settings_page') }}"><i class="fas fa-cog"></i> Settings</a>
+            </nav>
+        </div>
+    </header>
+
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages-wrapper">
+          <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="container">
+        {% if links %}
+            <div class="table-responsive-wrapper">
+                <table class="responsive-card-table link-table">
+                    <thead>
+                        <tr>
+                            <th>
+                                <a href="{{ url_for('index', page=current_page, sort_by='title', sort_order='desc' if sort_by == 'title' and sort_order == 'asc' else 'asc') }}" class="sort-link">
+                                    <span class="sort-text">Link Details</span>
+                                    {% if sort_by == 'title' %}<i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                                    {% else %}<i class="fas fa-sort sort-icon-default"></i>{% endif %}
+                                </a>
+                            </th>
+                            {# Removed "Actions" header #}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for link in links %}
+                        <tr>
+                            <td class="title-cell"> 
+                                <div class="title-and-bonus">
+                                    <a href="{{ link.url }}" target="_blank" title="Visit: {{ link.url }}" class="link-title-text">{{ link.title }}</a>
+                                    {% if link.reminder_status_info and link.reminder_status_info.status != 'n_a' %}
+                                        <span class="bonus-time-inline time-status-{{ link.reminder_status_info.status }}">
+                                            ({{ link.reminder_status_info.display_time }})
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <a href="{{ url_for('edit_link_form', link_id=link.id) }}" class="edit-link-icon" title="Edit '{{ link.title|escape|replace("'", "\\'") }}'">
+                                    <i class="fas fa-cog"></i>
+                                </a>
+                            </td>
+                            {# Removed "Actions" data cell #}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if total_pages > 1 %}
+            <div class="pagination">
+                {% if current_page > 1 %}
+                    <a href="{{ url_for('index', page=current_page-1, sort_by=sort_by, sort_order=sort_order) }}">Previous</a>
+                {% else %}
+                    <span class="disabled">Previous</span>
+                {% endif %}
+
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == current_page %}
+                        <span class="current">{{ p }}</span>
+                    {% else %}
+                        <a href="{{ url_for('index', page=p, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if current_page < total_pages %}
+                    <a href="{{ url_for('index', page=current_page+1, sort_by=sort_by, sort_order=sort_order) }}">Next</a>
+                {% else %}
+                    <span class="disabled">Next</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        {% else %}
+            <p class="text-center">No links found. <a href="{{ url_for('add_link_form') }}">Add your first link!</a></p>
+        {% endif %}
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; {{ "now"|datetime("%Y") }} Interactive Link Manager. All rights reserved.</p>
+    </footer>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
+
+</body>
+</html>
+
+templates/settings.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Interactive Link Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner-container">
+            <h1><i class="fas fa-link"></i> Interactive Link Manager</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('index') }}"><i class="fas fa-list"></i> All Links</a>
+                <a href="{{ url_for('add_link_form') }}"><i class="fas fa-plus-circle"></i> Add New Link</a>
+                <a href="{{ url_for('settings_page') }}"><i class="fas fa-cog"></i> Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages-wrapper">
+          <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="container">
+        <h2>Application Settings</h2>
+        <form method="POST" action="{{ url_for('settings_page') }}">
+            <div class="form-group">
+                <label for="page_size">Links per Page:</label>
+                <input type="number" id="page_size" name="page_size" 
+                       value="{{ current_settings.page_size | default(5, true) }}" 
+                       min="1" max="100" required>
+                <small>Number of links to display on each page (e.g., 5, 10, 20).</small>
+            </div>
+
+            <div class="form-group">
+                <label for="date_format_choice">Date Display Format:</label>
+                <select id="date_format_choice" name="date_format_choice">
+                    {% for choice_key, format_str in all_date_formats.items() %}
+                        {% set sample_date = "now"|datetime(format_str) if "now"|datetime(format_str) else format_str %}
+                        <option value="{{ choice_key }}" {% if choice_key == current_settings.date_format_choice %}selected{% endif %}>
+                            {{ format_str }} (e.g., {{ sample_date }})
+                        </option>
+                    {% endfor %}
+                </select>
+                <small>Choose how dates and times are displayed throughout the application.</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="default_export_path">Default Export Path (Server-Side):</label>
+                <input type="text" id="default_export_path" name="default_export_path"
+                       value="{{ current_settings.default_export_path | default('~/', true) }}">
+                <small>Note: This path is relative to the server. Its use in a web app might be limited.</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="button-primary"><i class="fas fa-save"></i> Save Settings</button>
+                <a href="{{ url_for('index') }}" class="button button-secondary cancel-link">Cancel</a>
+            </div>
+        </form>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; {{ "now"|datetime("%Y") }} Interactive Link Manager. All rights reserved.</p>
+    </footer>
+</body>
+</html>
+
+static/script.js
+
+// static/script.js
+document.addEventListener('DOMContentLoaded', function() {
+    const hamburgerButton = document.querySelector('.hamburger-menu');
+    const mainNav = document.getElementById('mainNav');
+    const navIcon = hamburgerButton.querySelector('i'); // Get the icon element
+
+    if (hamburgerButton && mainNav) {
+        hamburgerButton.addEventListener('click', function() {
+            const isExpanded = mainNav.classList.toggle('active');
+            hamburgerButton.setAttribute('aria-expanded', isExpanded);
+
+            // Change icon based on state
+            if (isExpanded) {
+                navIcon.classList.remove('fa-bars');
+                navIcon.classList.add('fa-times'); // Change to 'X' icon
+            } else {
+                navIcon.classList.remove('fa-times');
+                navIcon.classList.add('fa-bars');   // Change back to hamburger icon
+            }
+        });
+
+        // Optional: Close menu when a link is clicked (for SPA-like behavior or single-page feel)
+        mainNav.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (mainNav.classList.contains('active')) {
+                    mainNav.classList.remove('active');
+                    hamburgerButton.setAttribute('aria-expanded', 'false');
+                    navIcon.classList.remove('fa-times');
+                    navIcon.classList.add('fa-bars');
+                }
+            });
+        });
+
+        // Optional: Close menu if clicking outside of it
+        document.addEventListener('click', function(event) {
+            const isClickInsideNav = mainNav.contains(event.target);
+            const isClickOnHamburger = hamburgerButton.contains(event.target);
+
+            if (!isClickInsideNav && !isClickOnHamburger && mainNav.classList.contains('active')) {
+                mainNav.classList.remove('active');
+                hamburgerButton.setAttribute('aria-expanded', 'false');
+                navIcon.classList.remove('fa-times');
+                navIcon.classList.add('fa-bars');
+            }
+        });
+    }
+});
+
+static/style.css
+
+/* Modern App Style CSS */
+
+/* --- CSS Variables for Design System --- */
+:root {
+    /* Colors */
+    --primary-color: #6366f1;
+    --primary-hover: #4f46e5;
+    --primary-light: #a5b4fc;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+    --info-color: #3b82f6;
+    
+    /* Backgrounds */
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #f8fafc;
+    --bg-overlay: rgba(15, 23, 42, 0.8);
+    
+    /* Text Colors */
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    --text-inverse: #ffffff;
+    
+    /* Borders */
+    --border-color: #e2e8f0;
+    --border-hover: #cbd5e1;
+    --border-focus: var(--primary-color);
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    
+    /* Spacing */
+    --space-xs: 0.25rem;
+    --space-sm: 0.5rem;
+    --space-md: 1rem;
+    --space-lg: 1.5rem;
+    --space-xl: 2rem;
+    --space-2xl: 3rem;
+    
+    /* Border Radius */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    
+    /* Transitions */
+    --transition-fast: 150ms ease-out;
+    --transition-normal: 250ms ease-out;
+    --transition-slow: 350ms ease-out;
+}
+
+/* --- Reset & Base --- */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: var(--text-primary);
+    padding-top: 80px;
+    padding-bottom: 60px;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Modern Container --- */
+.container {
+    background: var(--bg-surface);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: var(--space-2xl);
+    margin: var(--space-xl) auto;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    max-width: 1200px;
+    position: relative;
+    overflow: hidden;
+}
+
+.container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+}
+
+/* --- Modern Typography --- */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary);
+    margin-bottom: 0.75em;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
+
+h2 {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: var(--space-md);
+    margin-bottom: var(--space-xl);
+    position: relative;
+}
+
+h2::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+    border-radius: var(--radius-sm);
+}
+
+p {
+    margin-bottom: var(--space-md);
+    color: var(--text-secondary);
+}
+
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    position: relative;
+}
+
+a:hover {
+    color: var(--primary-hover);
+    transform: translateY(-1px);
+}
+
+/* --- Modern Header --- */
+.site-header {
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-inverse);
+    padding: var(--space-md) 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+}
+
+.site-header .header-inner-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--space-xl);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.site-header h1 {
+    color: var(--text-inverse);
+    margin-bottom: 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #ffffff, var(--primary-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.site-header h1 a.header-title-link {
+    color: inherit;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.site-header h1 a.header-title-link:hover {
+    transform: scale(1.02);
+}
+
+.site-header h1 i {
+    margin-right: var(--space-sm);
+    color: var(--primary-light);
+    filter: drop-shadow(0 0 8px rgba(163, 180, 252, 0.5));
+}
+
+/* --- Modern Hamburger Menu --- */
+.hamburger-menu {
+    background: none;
+    border: none;
+    color: var(--text-inverse);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.hamburger-menu::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.hamburger-menu:hover::before {
+    opacity: 1;
+}
+
+.hamburger-menu:hover {
+    transform: scale(1.05);
+}
+
+/* --- Modern Navigation --- */
+.site-header .main-nav {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(20px);
+    min-width: 250px;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-xl);
+    padding: var(--space-md);
+    z-index: 999;
+    transform: translateY(-10px);
+    opacity: 0;
+    transition: all var(--transition-normal);
+}
+
+.site-header .main-nav.active {
+    display: block;
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.site-header .main-nav a {
+    color: var(--text-inverse);
+    padding: var(--space-md) var(--space-lg);
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-xs);
+    transition: all var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.site-header .main-nav a::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.site-header .main-nav a:hover::before,
+.site-header .main-nav a.active-nav-item::before {
+    opacity: 1;
+}
+
+.site-header .main-nav a:hover,
+.site-header .main-nav a.active-nav-item {
+    color: var(--text-inverse);
+    transform: translateX(4px);
+}
+
+.site-header .main-nav a i {
+    margin-right: var(--space-md);
+    width: 20px;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+}
+
+.site-header .main-nav a span {
+    position: relative;
+    z-index: 1;
+}
+
+/* --- Modern Flash Messages --- */
+.flash-messages-wrapper {
+    max-width: 1200px;
+    margin: var(--space-xl) auto;
+    padding: 0 var(--space-xl);
+}
+
+.flash-messages {
+    list-style-type: none;
+    padding: 0;
+}
+
+.flash-messages li {
+    padding: var(--space-lg) var(--space-xl);
+    margin-bottom: var(--space-md);
+    border-radius: var(--radius-lg);
+    font-size: 1rem;
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.flash-messages li::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    transition: width var(--transition-normal);
+}
+
+.flash-messages .success { 
+    background: rgba(16, 185, 129, 0.1); 
+    color: #065f46; 
+    border-left-color: var(--success-color);
+}
+.flash-messages .success::before { background: var(--success-color); }
+
+.flash-messages .error { 
+    background: rgba(239, 68, 68, 0.1); 
+    color: #991b1b; 
+    border-left-color: var(--danger-color);
+}
+.flash-messages .error::before { background: var(--danger-color); }
+
+.flash-messages .warning { 
+    background: rgba(245, 158, 11, 0.1); 
+    color: #92400e; 
+    border-left-color: var(--warning-color);
+}
+.flash-messages .warning::before { background: var(--warning-color); }
+
+.flash-messages .info { 
+    background: rgba(59, 130, 246, 0.1); 
+    color: #1e40af; 
+    border-left-color: var(--info-color);
+}
+.flash-messages .info::before { background: var(--info-color); }
+
+/* --- Modern Forms --- */
+form {
+    margin-top: var(--space-xl);
+}
+
+.form-group { 
+    margin-bottom: var(--space-xl); 
+}
+
+label { 
+    display: block; 
+    font-weight: 600; 
+    margin-bottom: var(--space-sm); 
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+input[type="text"], 
+input[type="url"], 
+input[type="email"], 
+input[type="password"], 
+input[type="date"], 
+input[type="time"], 
+textarea, 
+select {
+    width: 100%; 
+    padding: var(--space-lg);
+    border: 2px solid var(--border-color); 
+    border-radius: var(--radius-lg);
+    font-size: 1rem; 
+    line-height: 1.5; 
+    background-color: var(--bg-surface);
+    transition: all var(--transition-normal);
+    position: relative;
+}
+
+input:focus, 
+textarea:focus, 
+select:focus {
+    border-color: var(--primary-color);
+    outline: 0; 
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    transform: translateY(-1px);
+}
+
+textarea { 
+    min-height: 120px; 
+    resize: vertical; 
+}
+
+/* --- Modern Buttons --- */
+button, 
+input[type="submit"], 
+.button, 
+a.button-style {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-md) var(--space-xl);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5;
+    text-align: center;
+    cursor: pointer;
+    border: none;
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    transition: all var(--transition-normal);
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.025em;
+    box-shadow: var(--shadow-md);
+}
+
+button::before,
+.button::before,
+a.button-style::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left var(--transition-slow);
+}
+
+button:hover::before,
+.button:hover::before,
+a.button-style:hover::before {
+    left: 100%;
+}
+
+button:hover, 
+.button:hover, 
+a.button-style:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-xl);
+}
+
+button:active, 
+.button:active, 
+a.button-style:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-md);
+}
+
+.button-primary { 
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    color: var(--text-inverse);
+}
+
+.button-secondary, 
+a.cancel-link { 
+    background: var(--secondary-color);
+    color: var(--text-inverse);
+}
+
+.button-secondary:hover, 
+a.cancel-link:hover { 
+    background: #475569;
+    color: var(--text-inverse);
+    text-decoration: none;
+}
+
+.button-danger { 
+    background: linear-gradient(135deg, var(--danger-color), #dc2626);
+    color: var(--text-inverse);
+}
+
+button i, 
+.button i { 
+    margin-right: var(--space-sm);
+}
+
+/* --- Modern Tables --- */
+.table-responsive-wrapper {
+    overflow-x: auto;
+    margin-bottom: var(--space-lg);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-surface);
+}
+
+table {
+    width: 100%;
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    background-color: var(--bg-surface);
+}
+
+table:not(.responsive-card-table) {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+th, td {
+    padding: var(--space-lg);
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+thead th {
+    background: linear-gradient(135deg, var(--bg-surface-elevated), #f1f5f9);
+    color: var(--text-primary);
+    font-weight: 700;
+    border-bottom: 2px solid var(--border-color);
+    position: relative;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.875rem;
+}
+
+tbody tr {
+    transition: all var(--transition-fast);
+}
+
+tbody tr:hover {
+    background: var(--bg-surface-elevated);
+    transform: scale(1.001);
+}
+
+/* --- Modern Time Status --- */
+.time-status-upcoming { 
+    color: var(--success-color); 
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.time-status-elapsed { 
+    color: var(--danger-color); 
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+.time-status-n_a { 
+    color: var(--text-muted); 
+    font-style: italic; 
+}
+
+/* --- Modern Pagination --- */
+.pagination { 
+    margin-top: var(--space-2xl); 
+    text-align: center; 
+    display: flex;
+    justify-content: center;
+    gap: var(--space-sm);
+}
+
+.pagination a, 
+.pagination span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-md);
+    min-width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    text-decoration: none; 
+    transition: all var(--transition-fast);
+    font-weight: 500;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+}
+
+.pagination a:hover { 
+    background: var(--primary-color);
+    color: var(--text-inverse);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.pagination .current { 
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    color: var(--text-inverse);
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-md);
+}
+
+/* --- Modern Footer --- */
+.site-footer {
+    text-align: center; 
+    margin-top: var(--space-2xl); 
+    padding: var(--space-xl);
+    background: rgba(15, 23, 42, 0.05);
+    backdrop-filter: blur(10px);
+    color: var(--text-muted); 
+    font-size: 0.875rem;
+    border-top: 1px solid var(--border-color);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 768px) {
+    :root {
+        --space-xs: 0.125rem;
+        --space-sm: 0.25rem;
+        --space-md: 0.75rem;
+        --space-lg: 1rem;
+        --space-xl: 1.5rem;
+        --space-2xl: 2rem;
+    }
+
+    body {
+        padding-top: 70px;
+    }
+
+    .container { 
+        padding: var(--space-xl) var(--space-lg);
+        margin: var(--space-md) var(--space-sm);
+        border-radius: var(--radius-lg);
+    }
+
+    .site-header h1 { 
+        font-size: 1.25rem; 
+    }
+
+    h2 { 
+        font-size: 1.5rem; 
+    }
+
+    .site-header .main-nav {
+        left: var(--space-sm);
+        right: var(--space-sm);
+        min-width: auto;
+    }
+
+    /* Card-style responsive tables */
+    .table-responsive-wrapper { 
+        overflow-x: visible; 
+        box-shadow: none;
+        background: transparent;
+    }
+
+    table.responsive-card-table { 
+        background-color: transparent; 
+        box-shadow: none;
+    }
+
+    table.responsive-card-table thead { 
+        display: none; 
+    }
+
+    table.responsive-card-table tbody tr {
+        display: block; 
+        margin-bottom: var(--space-xl); 
+        background: var(--bg-surface);
+        border-radius: var(--radius-lg);
+        padding: var(--space-xl);
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+        position: relative;
+        overflow: hidden;
+    }
+
+    table.responsive-card-table tbody tr::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+    }
+
+    table.responsive-card-table tbody tr:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-xl);
+    }
+
+    table.responsive-card-table td {
+        display: block;
+        padding: var(--space-md) 0;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.95rem;
+        position: relative;
+        text-align: left;
+    }
+
+    table.responsive-card-table td:last-of-type { 
+        border-bottom: none; 
+    }
+
+    table.responsive-card-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        font-weight: 700;
+        margin-bottom: var(--space-sm);
+        color: var(--text-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .site-header h1 { 
+        font-size: 1.125rem; 
+    }
+
+    h2 { 
+        font-size: 1.25rem; 
+    }
+
+    .container {
+        margin: var(--space-sm);
+        padding: var(--space-lg);
+    }
+}
+
+/* --- Modern Animations --- */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+.container {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+.flash-messages li {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+/* --- Utility Classes --- */
+.text-center { 
+    text-align: center !important; 
+}
+
+.glass-effect {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}

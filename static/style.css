@@ -3,40 +3,41 @@
 /* --- CSS Variables for Design System --- */
 :root {
     /* Colors */
-    --primary-color: #6366f1;
-    --primary-hover: #4f46e5;
-    --primary-light: #a5b4fc;
-    --secondary-color: #64748b;
-    --success-color: #10b981;
-    --danger-color: #ef4444;
-    --warning-color: #f59e0b;
-    --info-color: #3b82f6;
-    
+    --primary-color: #8b5cf6; /* A vibrant purple */
+    --primary-hover: #7c3aed; /* Darker purple */
+    --primary-light: #a78bfa; /* Lighter purple */
+    --secondary-color: #64748b; /* Already good for muted elements */
+    --success-color: #22c55e; /* Green */
+    --danger-color: #ef4444; /* Red */
+    --warning-color: #f59e0b; /* Yellow/Orange */
+    --info-color: #3b82f6;   /* Blue */
+
     /* Backgrounds */
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-    --bg-surface: #ffffff;
-    --bg-surface-elevated: #f8fafc;
-    --bg-overlay: rgba(15, 23, 42, 0.8);
-    
+    --bg-primary: #0f172a; /* Deep dark blue */
+    --bg-secondary: #1e293b; /* Slightly lighter dark blue */
+    --bg-tertiary: #334155; /* Even lighter dark blue for distinct elements */
+    --bg-surface: #1a202c; /* Main card/content background */
+    --bg-surface-elevated: #2d3748; /* For hover states or slightly elevated cards */
+    --bg-overlay: rgba(0, 0, 0, 0.8); /* Darker overlay */
+
     /* Text Colors */
-    --text-primary: #0f172a;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
-    --text-inverse: #ffffff;
-    
+    --text-primary: #e2e8f0; /* Light grey for main text */
+    --text-secondary: #a0aec0; /* Muted grey for secondary text */
+    --text-muted: #718096; /* Even more muted grey */
+    --text-inverse: #0f172a; /* Dark text on light backgrounds (not used much in dark theme) */
+    --text-on-primary: #ffffff; /* White text on primary color */
+
     /* Borders */
-    --border-color: #e2e8f0;
-    --border-hover: #cbd5e1;
+    --border-color: #4a5568; /* Darker, less intrusive borders */
+    --border-hover: #616e7f;
     --border-focus: var(--primary-color);
-    
+
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.25);
+
     /* Spacing */
     --space-xs: 0.25rem;
     --space-sm: 0.5rem;
@@ -44,13 +45,13 @@
     --space-lg: 1.5rem;
     --space-xl: 2rem;
     --space-2xl: 3rem;
-    
+
     /* Border Radius */
     --radius-sm: 0.375rem;
     --radius-md: 0.5rem;
     --radius-lg: 0.75rem;
     --radius-xl: 1rem;
-    
+
     /* Transitions */
     --transition-fast: 150ms ease-out;
     --transition-normal: 250ms ease-out;
@@ -67,9 +68,9 @@
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     line-height: 1.6;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--bg-primary); /* Use primary dark background */
     min-height: 100vh;
-    color: var(--text-primary);
+    color: var(--text-primary); /* Primary text color */
     padding-top: 80px;
     padding-bottom: 60px;
     font-size: 16px;
@@ -79,13 +80,13 @@ body {
 
 /* --- Modern Container --- */
 .container {
-    background: var(--bg-surface);
+    background: var(--bg-surface); /* Main content background */
     backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--border-color); /* Darker border */
     padding: var(--space-2xl);
     margin: var(--space-xl) auto;
     border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-xl);
+    box-shadow: var(--shadow-xl); /* Darker shadows */
     max-width: 1200px;
     position: relative;
     overflow: hidden;
@@ -98,12 +99,12 @@ body {
     left: 0;
     right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent); /* Subtle light line */
 }
 
 /* --- Modern Typography --- */
 h1, h2, h3, h4, h5, h6 {
-    color: var(--text-primary);
+    color: var(--text-primary); /* Primary text color for headings */
     margin-bottom: 0.75em;
     line-height: 1.2;
     font-weight: 700;
@@ -113,7 +114,7 @@ h1, h2, h3, h4, h5, h6 {
 h2 {
     font-size: 2rem;
     font-weight: 800;
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    background: linear-gradient(135deg, var(--primary-light), var(--primary-color)); /* Lighter gradient for dark mode headings */
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -130,40 +131,40 @@ h2::after {
     left: 0;
     width: 60px;
     height: 3px;
-    background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+    background: linear-gradient(90deg, var(--primary-light), var(--primary-color)); /* Lighter gradient */
     border-radius: var(--radius-sm);
 }
 
 p {
     margin-bottom: var(--space-md);
-    color: var(--text-secondary);
+    color: var(--text-secondary); /* Secondary text color */
 }
 
 a {
-    color: var(--primary-color);
+    color: var(--primary-light); /* Lighter primary color for links */
     text-decoration: none;
     transition: all var(--transition-fast);
     position: relative;
 }
 
 a:hover {
-    color: var(--primary-hover);
+    color: var(--primary-color); /* Primary color on hover */
     transform: translateY(-1px);
 }
 
 /* --- Modern Header --- */
 .site-header {
-    background: rgba(15, 23, 42, 0.95);
+    background: var(--bg-secondary); /* Darker header background */
     backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--text-inverse);
+    border-bottom: 1px solid var(--border-color); /* Darker border */
+    color: var(--text-primary); /* Primary text color */
     padding: var(--space-md) 0;
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     z-index: 1000;
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-lg); /* Darker shadow */
 }
 
 .site-header .header-inner-container {
@@ -177,11 +178,11 @@ a:hover {
 }
 
 .site-header h1 {
-    color: var(--text-inverse);
+    color: var(--text-primary); /* Primary text color for h1 */
     margin-bottom: 0;
     font-size: 1.75rem;
     font-weight: 800;
-    background: linear-gradient(135deg, #ffffff, var(--primary-light));
+    background: linear-gradient(135deg, var(--text-primary), var(--primary-light)); /* Gradient for header title */
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -200,14 +201,14 @@ a:hover {
 .site-header h1 i {
     margin-right: var(--space-sm);
     color: var(--primary-light);
-    filter: drop-shadow(0 0 8px rgba(163, 180, 252, 0.5));
+    filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.5)); /* Adjusted shadow for new primary color */
 }
 
 /* --- Modern Hamburger Menu --- */
 .hamburger-menu {
     background: none;
     border: none;
-    color: var(--text-inverse);
+    color: var(--text-primary); /* Primary text color */
     font-size: 1.5rem;
     cursor: pointer;
     padding: var(--space-sm);
@@ -224,7 +225,7 @@ a:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05); /* Subtle white overlay for hover */
     border-radius: var(--radius-md);
     opacity: 0;
     transition: opacity var(--transition-fast);
@@ -244,11 +245,11 @@ a:hover {
     position: absolute;
     top: calc(100% + 10px);
     right: 0;
-    background: rgba(30, 41, 59, 0.95);
+    background: var(--bg-tertiary); /* Lighter dark background for nav */
     backdrop-filter: blur(20px);
     min-width: 250px;
     border-radius: var(--radius-lg);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
     box-shadow: var(--shadow-xl);
     padding: var(--space-md);
     z-index: 999;
@@ -264,7 +265,7 @@ a:hover {
 }
 
 .site-header .main-nav a {
-    color: var(--text-inverse);
+    color: var(--text-primary); /* Primary text color for nav links */
     padding: var(--space-md) var(--space-lg);
     display: flex;
     align-items: center;
@@ -284,7 +285,7 @@ a:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
     opacity: 0;
     transition: opacity var(--transition-fast);
 }
@@ -296,7 +297,7 @@ a:hover {
 
 .site-header .main-nav a:hover,
 .site-header .main-nav a.active-nav-item {
-    color: var(--text-inverse);
+    color: var(--text-on-primary); /* White text on primary background */
     transform: translateX(4px);
 }
 
@@ -334,7 +335,8 @@ a:hover {
     position: relative;
     overflow: hidden;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--border-color); /* Darker border */
+    color: var(--text-primary); /* Primary text color */
 }
 
 .flash-messages li::before {
@@ -347,30 +349,30 @@ a:hover {
     transition: width var(--transition-normal);
 }
 
-.flash-messages .success { 
-    background: rgba(16, 185, 129, 0.1); 
-    color: #065f46; 
+.flash-messages .success {
+    background: rgba(34, 197, 94, 0.1); /* Subtle green background */
+    color: var(--success-color); /* Green text */
     border-left-color: var(--success-color);
 }
 .flash-messages .success::before { background: var(--success-color); }
 
-.flash-messages .error { 
-    background: rgba(239, 68, 68, 0.1); 
-    color: #991b1b; 
+.flash-messages .error {
+    background: rgba(239, 68, 68, 0.1); /* Subtle red background */
+    color: var(--danger-color); /* Red text */
     border-left-color: var(--danger-color);
 }
 .flash-messages .error::before { background: var(--danger-color); }
 
-.flash-messages .warning { 
-    background: rgba(245, 158, 11, 0.1); 
-    color: #92400e; 
+.flash-messages .warning {
+    background: rgba(245, 158, 11, 0.1); /* Subtle orange background */
+    color: var(--warning-color); /* Orange text */
     border-left-color: var(--warning-color);
 }
 .flash-messages .warning::before { background: var(--warning-color); }
 
-.flash-messages .info { 
-    background: rgba(59, 130, 246, 0.1); 
-    color: #1e40af; 
+.flash-messages .info {
+    background: rgba(59, 130, 246, 0.1); /* Subtle blue background */
+    color: var(--info-color); /* Blue text */
     border-left-color: var(--info-color);
 }
 .flash-messages .info::before { background: var(--info-color); }
@@ -380,57 +382,63 @@ form {
     margin-top: var(--space-xl);
 }
 
-.form-group { 
-    margin-bottom: var(--space-xl); 
+.form-group {
+    margin-bottom: var(--space-xl);
 }
 
-label { 
-    display: block; 
-    font-weight: 600; 
-    margin-bottom: var(--space-sm); 
-    color: var(--text-primary);
+label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: var(--space-sm);
+    color: var(--text-primary); /* Primary text color */
     font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
-input[type="text"], 
-input[type="url"], 
-input[type="email"], 
-input[type="password"], 
-input[type="date"], 
-input[type="time"], 
-textarea, 
+input[type="text"],
+input[type="url"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+textarea,
 select {
-    width: 100%; 
+    width: 100%;
     padding: var(--space-lg);
-    border: 2px solid var(--border-color); 
+    border: 2px solid var(--border-color); /* Darker border */
     border-radius: var(--radius-lg);
-    font-size: 1rem; 
-    line-height: 1.5; 
-    background-color: var(--bg-surface);
+    font-size: 1rem;
+    line-height: 1.5;
+    background-color: var(--bg-secondary); /* Darker input background */
+    color: var(--text-primary); /* Primary text color for input */
     transition: all var(--transition-normal);
     position: relative;
 }
 
-input:focus, 
-textarea:focus, 
+input::placeholder, textarea::placeholder {
+    color: var(--text-muted); /* Muted placeholder text */
+}
+
+
+input:focus,
+textarea:focus,
 select:focus {
-    border-color: var(--primary-color);
-    outline: 0; 
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: var(--primary-light); /* Lighter primary color on focus */
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1); /* Adjusted shadow for new primary color */
     transform: translateY(-1px);
 }
 
-textarea { 
-    min-height: 120px; 
-    resize: vertical; 
+textarea {
+    min-height: 120px;
+    resize: vertical;
 }
 
 /* --- Modern Buttons --- */
-button, 
-input[type="submit"], 
-.button, 
+button,
+input[type="submit"],
+.button,
 a.button-style {
     display: inline-flex;
     align-items: center;
@@ -450,6 +458,7 @@ a.button-style {
     overflow: hidden;
     letter-spacing: 0.025em;
     box-shadow: var(--shadow-md);
+    color: var(--text-on-primary); /* Text on buttons should be white */
 }
 
 button::before,
@@ -461,7 +470,7 @@ a.button-style::before {
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent); /* Subtle shine effect */
     transition: left var(--transition-slow);
 }
 
@@ -471,45 +480,46 @@ a.button-style:hover::before {
     left: 100%;
 }
 
-button:hover, 
-.button:hover, 
+button:hover,
+.button:hover,
 a.button-style:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-xl);
 }
 
-button:active, 
-.button:active, 
+button:active,
+.button:active,
 a.button-style:active {
     transform: translateY(0);
     box-shadow: var(--shadow-md);
 }
 
-.button-primary { 
+.button-primary {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-    color: var(--text-inverse);
+    color: var(--text-on-primary);
 }
 
-.button-secondary, 
-a.cancel-link { 
-    background: var(--secondary-color);
-    color: var(--text-inverse);
+.button-secondary,
+a.cancel-link {
+    background: var(--bg-tertiary); /* Darker grey for secondary buttons */
+    color: var(--text-primary); /* Primary text color for secondary buttons */
+    border: 1px solid var(--border-color);
 }
 
-.button-secondary:hover, 
-a.cancel-link:hover { 
-    background: #475569;
-    color: var(--text-inverse);
+.button-secondary:hover,
+a.cancel-link:hover {
+    background: #475569; /* Slightly darker on hover */
+    color: var(--text-primary);
     text-decoration: none;
 }
 
-.button-danger { 
+.button-danger {
     background: linear-gradient(135deg, var(--danger-color), #dc2626);
-    color: var(--text-inverse);
+    color: var(--text-on-primary);
 }
 
-button i, 
-.button i { 
+button i,
+.button i {
     margin-right: var(--space-sm);
 }
 
@@ -519,7 +529,7 @@ button i,
     margin-bottom: var(--space-lg);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
-    background: var(--bg-surface);
+    background: var(--bg-surface); /* Main surface for table container */
 }
 
 table {
@@ -538,13 +548,13 @@ table:not(.responsive-card-table) {
 th, td {
     padding: var(--space-lg);
     text-align: left;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color); /* Darker border */
     vertical-align: middle;
 }
 
 thead th {
-    background: linear-gradient(135deg, var(--bg-surface-elevated), #f1f5f9);
-    color: var(--text-primary);
+    background: var(--bg-tertiary); /* Darker header for table */
+    color: var(--text-primary); /* Primary text color */
     font-weight: 700;
     border-bottom: 2px solid var(--border-color);
     position: relative;
@@ -558,38 +568,83 @@ tbody tr {
 }
 
 tbody tr:hover {
-    background: var(--bg-surface-elevated);
+    background: var(--bg-surface-elevated); /* Elevated surface on hover */
     transform: scale(1.001);
 }
 
+/* Link Details specific for index.html table */
+.title-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* To push edit icon to the right */
+}
+
+.title-and-bonus {
+    display: flex;
+    flex-wrap: wrap; /* Allows bonus time to wrap on smaller screens */
+    align-items: baseline;
+}
+
+.link-title-text {
+    font-weight: 600;
+    font-size: 1.1em;
+    margin-right: var(--space-sm);
+    white-space: nowrap; /* Prevent title from breaking lines too aggressively */
+    overflow: hidden;
+    text-overflow: ellipsis; /* Add ellipsis for long titles */
+    max-width: calc(100% - 70px); /* Adjust based on icon width */
+}
+
+.link-title-text:hover {
+    text-decoration: underline;
+}
+
+.edit-link-icon {
+    color: var(--text-muted); /* Muted icon color */
+    font-size: 0.9em;
+    padding: var(--space-xs);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.edit-link-icon:hover {
+    color: var(--primary-light); /* Lighter primary on hover */
+    background-color: var(--bg-tertiary);
+}
+
 /* --- Modern Time Status --- */
-.time-status-upcoming { 
-    color: var(--success-color); 
-    font-weight: 700;
-    text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+.bonus-time-inline {
+    font-size: 0.9em;
+    font-weight: 500;
 }
 
-.time-status-elapsed { 
-    color: var(--danger-color); 
+.time-status-upcoming {
+    color: var(--success-color);
     font-weight: 700;
-    text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+    text-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
 }
 
-.time-status-n_a { 
-    color: var(--text-muted); 
-    font-style: italic; 
+.time-status-elapsed {
+    color: var(--danger-color);
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+.time-status-n_a {
+    color: var(--text-muted);
+    font-style: italic;
 }
 
 /* --- Modern Pagination --- */
-.pagination { 
-    margin-top: var(--space-2xl); 
-    text-align: center; 
+.pagination {
+    margin-top: var(--space-2xl);
+    text-align: center;
     display: flex;
     justify-content: center;
     gap: var(--space-sm);
 }
 
-.pagination a, 
+.pagination a,
 .pagination span {
     display: inline-flex;
     align-items: center;
@@ -598,37 +653,42 @@ tbody tr:hover {
     min-width: 44px;
     height: 44px;
     border-radius: var(--radius-md);
-    color: var(--text-secondary);
-    text-decoration: none; 
+    color: var(--text-secondary); /* Secondary text color */
+    text-decoration: none;
     transition: all var(--transition-fast);
     font-weight: 500;
-    background: var(--bg-surface);
+    background: var(--bg-secondary); /* Darker background for pagination items */
     border: 1px solid var(--border-color);
 }
 
-.pagination a:hover { 
+.pagination a:hover {
     background: var(--primary-color);
-    color: var(--text-inverse);
+    color: var(--text-on-primary); /* White text on hover */
     border-color: var(--primary-color);
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
 }
 
-.pagination .current { 
+.pagination .current {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-    color: var(--text-inverse);
+    color: var(--text-on-primary); /* White text on current */
     border-color: var(--primary-color);
     box-shadow: var(--shadow-md);
 }
 
+.pagination .disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* --- Modern Footer --- */
 .site-footer {
-    text-align: center; 
-    margin-top: var(--space-2xl); 
+    text-align: center;
+    margin-top: var(--space-2xl);
     padding: var(--space-xl);
-    background: rgba(15, 23, 42, 0.05);
+    background: var(--bg-secondary); /* Darker footer background */
     backdrop-filter: blur(10px);
-    color: var(--text-muted); 
+    color: var(--text-muted); /* Muted text color */
     font-size: 0.875rem;
     border-top: 1px solid var(--border-color);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -649,18 +709,18 @@ tbody tr:hover {
         padding-top: 70px;
     }
 
-    .container { 
+    .container {
         padding: var(--space-xl) var(--space-lg);
         margin: var(--space-md) var(--space-sm);
         border-radius: var(--radius-lg);
     }
 
-    .site-header h1 { 
-        font-size: 1.25rem; 
+    .site-header h1 {
+        font-size: 1.25rem;
     }
 
-    h2 { 
-        font-size: 1.5rem; 
+    h2 {
+        font-size: 1.5rem;
     }
 
     .site-header .main-nav {
@@ -670,24 +730,24 @@ tbody tr:hover {
     }
 
     /* Card-style responsive tables */
-    .table-responsive-wrapper { 
-        overflow-x: visible; 
+    .table-responsive-wrapper {
+        overflow-x: visible;
         box-shadow: none;
         background: transparent;
     }
 
-    table.responsive-card-table { 
-        background-color: transparent; 
+    table.responsive-card-table {
+        background-color: transparent;
         box-shadow: none;
     }
 
-    table.responsive-card-table thead { 
-        display: none; 
+    table.responsive-card-table thead {
+        display: none;
     }
 
     table.responsive-card-table tbody tr {
-        display: block; 
-        margin-bottom: var(--space-xl); 
+        display: block;
+        margin-bottom: var(--space-xl);
         background: var(--bg-surface);
         border-radius: var(--radius-lg);
         padding: var(--space-xl);
@@ -704,7 +764,7 @@ tbody tr:hover {
         left: 0;
         right: 0;
         height: 4px;
-        background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+        background: linear-gradient(90deg, var(--primary-light), var(--primary-color)); /* Lighter gradient */
     }
 
     table.responsive-card-table tbody tr:hover {
@@ -721,8 +781,8 @@ tbody tr:hover {
         text-align: left;
     }
 
-    table.responsive-card-table td:last-of-type { 
-        border-bottom: none; 
+    table.responsive-card-table td:last-of-type {
+        border-bottom: none;
     }
 
     table.responsive-card-table td[data-label]::before {
@@ -730,7 +790,7 @@ tbody tr:hover {
         display: block;
         font-weight: 700;
         margin-bottom: var(--space-sm);
-        color: var(--text-primary);
+        color: var(--text-secondary); /* Secondary text for labels */
         text-transform: uppercase;
         letter-spacing: 0.05em;
         font-size: 0.75rem;
@@ -738,12 +798,12 @@ tbody tr:hover {
 }
 
 @media (max-width: 480px) {
-    .site-header h1 { 
-        font-size: 1.125rem; 
+    .site-header h1 {
+        font-size: 1.125rem;
     }
 
-    h2 { 
-        font-size: 1.25rem; 
+    h2 {
+        font-size: 1.25rem;
     }
 
     .container {
@@ -782,167 +842,12 @@ tbody tr:hover {
 }
 
 /* --- Utility Classes --- */
-.text-center { 
-    text-align: center !important; 
+.text-center {
+    text-align: center !important;
 }
 
 .glass-effect {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05); /* Lighter glass effect */
     backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
-
-/* --- Index Page Specific Styles --- */
-.title-cell {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--space-md); /* Space between title/bonus and icon */
-}
-
-.title-and-bonus {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    flex-grow: 1; /* Allows it to take available space */
-}
-
-.link-title-text {
-    font-weight: 600;
-    font-size: 1.1rem;
-    color: var(--text-primary);
-    word-break: break-all; /* Prevents long URLs from overflowing */
-}
-
-.link-title-text:hover {
-    color: var(--primary-color);
-}
-
-.bonus-time-inline {
-    font-size: 0.85rem;
-    margin-top: var(--space-xs); /* Small space between title and time */
-    padding: var(--space-xs) var(--space-sm);
-    border-radius: var(--radius-sm);
-    background-color: rgba(0, 0, 0, 0.05); /* Slightly darker background for the badge */
-}
-
-.time-status-upcoming {
-    background-color: rgba(16, 185, 129, 0.1);
-    color: var(--success-color);
-}
-
-.time-status-elapsed {
-    background-color: rgba(239, 68, 68, 0.1);
-    color: var(--danger-color);
-}
-
-.time-status-n_a {
-    background-color: rgba(148, 163, 184, 0.1);
-    color: var(--text-muted);
-}
-
-.edit-link-icon {
-    flex-shrink: 0; /* Prevents icon from shrinking */
-    padding: var(--space-sm);
-    border-radius: var(--radius-md);
-    color: var(--text-secondary);
-    transition: all var(--transition-fast);
-}
-
-.edit-link-icon:hover {
-    color: var(--primary-color);
-    background-color: rgba(99, 102, 241, 0.1);
-    transform: scale(1.1);
-}
-
-.sort-link {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-sm);
-    color: inherit; /* Inherit color from th */
-    text-decoration: none;
-}
-
-.sort-link:hover {
-    color: var(--primary-color);
-    text-decoration: none;
-}
-
-.sort-link .sort-icon-default {
-    color: var(--text-muted);
-}
-
-/* --- Edit Link Page Specific Styles --- */
-/* Form actions for grouping buttons */
-.form-actions {
-    display: flex;
-    flex-wrap: wrap; /* Allows wrapping on smaller screens */
-    gap: var(--space-md); /* Space between buttons */
-    margin-top: var(--space-2xl);
-    padding-top: var(--space-xl);
-    border-top: 1px solid var(--border-color);
-}
-
-/* Specific styling for the delete button wrapper on edit page */
-.edit-page-actions.separate-delete-action {
-    margin-top: var(--space-lg); /* Adjust space if needed */
-    padding-top: 0; /* No top border if already grouped by main form's border */
-    border-top: none;
-}
-
-.delete-link-form-edit-page {
-    display: inline-block; /* Allows button to be inline with others if desired */
-}
-
-/* Responsive adjustments for tables */
-@media (max-width: 768px) {
-    table.responsive-card-table td.title-cell {
-        flex-direction: column;
-        align-items: flex-start;
-        border-bottom: 1px solid var(--border-color); /* Add back border for individual cells */
-        padding-top: var(--space-lg); /* Add more padding for better separation */
-        padding-bottom: var(--space-lg);
-    }
-
-    table.responsive-card-table td.title-cell .edit-link-icon {
-        position: absolute; /* Position icon in the top right of the card */
-        top: var(--space-lg);
-        right: var(--space-lg);
-        background: rgba(99, 102, 241, 0.05); /* Light background for visibility */
-        border-radius: var(--radius-md);
-        padding: var(--space-sm);
-    }
-
-    table.responsive-card-table td.title-cell .bonus-time-inline {
-        order: 1; /* Place time status above title on mobile */
-        margin-top: var(--space-sm);
-        margin-bottom: var(--space-sm);
-    }
-
-    table.responsive-card-table td.title-cell .link-title-text {
-        order: 2; /* Place title below time status */
-    }
-
-    /* Group form actions nicely on mobile */
-    .form-actions {
-        flex-direction: column;
-        align-items: stretch; /* Stretch buttons to full width */
-    }
-
-    .form-actions button,
-    .form-actions a.button,
-    .form-actions .button-primary,
-    .form-actions .button-secondary,
-    .form-actions .button-danger {
-        width: 100%; /* Full width buttons */
-        margin-bottom: var(--space-md); /* Space between stacked buttons */
-    }
-
-    /* Remove extra margin for the last button in a group */
-    .form-actions button:last-child,
-    .form-actions a.button:last-child {
-        margin-bottom: 0;
-    }
-}
-
-
