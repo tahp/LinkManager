@@ -791,3 +791,158 @@ tbody tr:hover {
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
+
+/* --- Index Page Specific Styles --- */
+.title-cell {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-md); /* Space between title/bonus and icon */
+}
+
+.title-and-bonus {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    flex-grow: 1; /* Allows it to take available space */
+}
+
+.link-title-text {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    word-break: break-all; /* Prevents long URLs from overflowing */
+}
+
+.link-title-text:hover {
+    color: var(--primary-color);
+}
+
+.bonus-time-inline {
+    font-size: 0.85rem;
+    margin-top: var(--space-xs); /* Small space between title and time */
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    background-color: rgba(0, 0, 0, 0.05); /* Slightly darker background for the badge */
+}
+
+.time-status-upcoming {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: var(--success-color);
+}
+
+.time-status-elapsed {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: var(--danger-color);
+}
+
+.time-status-n_a {
+    background-color: rgba(148, 163, 184, 0.1);
+    color: var(--text-muted);
+}
+
+.edit-link-icon {
+    flex-shrink: 0; /* Prevents icon from shrinking */
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.edit-link-icon:hover {
+    color: var(--primary-color);
+    background-color: rgba(99, 102, 241, 0.1);
+    transform: scale(1.1);
+}
+
+.sort-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: inherit; /* Inherit color from th */
+    text-decoration: none;
+}
+
+.sort-link:hover {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.sort-link .sort-icon-default {
+    color: var(--text-muted);
+}
+
+/* --- Edit Link Page Specific Styles --- */
+/* Form actions for grouping buttons */
+.form-actions {
+    display: flex;
+    flex-wrap: wrap; /* Allows wrapping on smaller screens */
+    gap: var(--space-md); /* Space between buttons */
+    margin-top: var(--space-2xl);
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--border-color);
+}
+
+/* Specific styling for the delete button wrapper on edit page */
+.edit-page-actions.separate-delete-action {
+    margin-top: var(--space-lg); /* Adjust space if needed */
+    padding-top: 0; /* No top border if already grouped by main form's border */
+    border-top: none;
+}
+
+.delete-link-form-edit-page {
+    display: inline-block; /* Allows button to be inline with others if desired */
+}
+
+/* Responsive adjustments for tables */
+@media (max-width: 768px) {
+    table.responsive-card-table td.title-cell {
+        flex-direction: column;
+        align-items: flex-start;
+        border-bottom: 1px solid var(--border-color); /* Add back border for individual cells */
+        padding-top: var(--space-lg); /* Add more padding for better separation */
+        padding-bottom: var(--space-lg);
+    }
+
+    table.responsive-card-table td.title-cell .edit-link-icon {
+        position: absolute; /* Position icon in the top right of the card */
+        top: var(--space-lg);
+        right: var(--space-lg);
+        background: rgba(99, 102, 241, 0.05); /* Light background for visibility */
+        border-radius: var(--radius-md);
+        padding: var(--space-sm);
+    }
+
+    table.responsive-card-table td.title-cell .bonus-time-inline {
+        order: 1; /* Place time status above title on mobile */
+        margin-top: var(--space-sm);
+        margin-bottom: var(--space-sm);
+    }
+
+    table.responsive-card-table td.title-cell .link-title-text {
+        order: 2; /* Place title below time status */
+    }
+
+    /* Group form actions nicely on mobile */
+    .form-actions {
+        flex-direction: column;
+        align-items: stretch; /* Stretch buttons to full width */
+    }
+
+    .form-actions button,
+    .form-actions a.button,
+    .form-actions .button-primary,
+    .form-actions .button-secondary,
+    .form-actions .button-danger {
+        width: 100%; /* Full width buttons */
+        margin-bottom: var(--space-md); /* Space between stacked buttons */
+    }
+
+    /* Remove extra margin for the last button in a group */
+    .form-actions button:last-child,
+    .form-actions a.button:last-child {
+        margin-bottom: 0;
+    }
+}
+
+
